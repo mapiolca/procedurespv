@@ -91,6 +91,26 @@ if ($linkUsable) {
 	}
 }
 
+$isSubmitCollecte = $action === 'submit_collecte';
+$formClientType = $isSubmitCollecte ? GETPOST('client_type', 'alphanohtml') : 'particulier';
+$formClientName = $isSubmitCollecte ? GETPOST('client_name', 'restricthtml') : '';
+$formClientSiret = $isSubmitCollecte ? GETPOST('client_siret', 'alphanohtml') : '';
+$formClientEmail = $isSubmitCollecte ? GETPOST('client_email', 'restricthtml') : (string) $publicLink->email_destinataire;
+$formClientPhone = $isSubmitCollecte ? GETPOST('client_phone', 'alphanohtml') : '';
+$formSiteName = $isSubmitCollecte ? GETPOST('site_name', 'restricthtml') : (string) $object->site_name_snapshot;
+$formSiteAddress = $isSubmitCollecte ? GETPOST('site_address', 'restricthtml') : (string) $object->site_address_snapshot;
+$formSiteZip = $isSubmitCollecte ? GETPOST('site_zip', 'alphanohtml') : (string) $object->site_zip_snapshot;
+$formSiteTown = $isSubmitCollecte ? GETPOST('site_town', 'restricthtml') : (string) $object->site_town_snapshot;
+$formPrm = $isSubmitCollecte ? GETPOST('prm', 'alphanohtml') : (string) $object->prm;
+$formTypeReseau = $isSubmitCollecte ? GETPOST('type_reseau', 'alphanohtml') : (string) $object->type_reseau;
+$formTypeExploitation = $isSubmitCollecte ? GETPOST('type_exploitation', 'alphanohtml') : (string) $object->type_exploitation;
+$formPuissanceInstallee = $isSubmitCollecte ? GETPOST('puissance_installee_kwc', 'alphanohtml') : (string) $object->puissance_installee_kwc;
+$formPuissanceInjection = $isSubmitCollecte ? GETPOST('puissance_injection_kva', 'alphanohtml') : (string) $object->puissance_injection_kva;
+$formSignataireNom = $isSubmitCollecte ? GETPOST('signataire_nom', 'restricthtml') : '';
+$formSignataireFonction = $isSubmitCollecte ? GETPOST('signataire_fonction', 'restricthtml') : '';
+$formSignataireEmail = $isSubmitCollecte ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
+$formMandatAcceptance = $isSubmitCollecte ? GETPOST('mandat_acceptance', 'alphanohtml') : 'no';
+
 if ($linkUsable && $action !== 'submit_collecte') {
 	$ip = function_exists('getUserRemoteIP') ? getUserRemoteIP() : (isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '');
 	$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
@@ -108,23 +128,25 @@ if ($linkUsable && $action === 'submit_collecte') {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
 
-	$clientType = GETPOST('client_type', 'alphanohtml');
-	$clientName = GETPOST('client_name', 'restricthtml');
-	$clientEmail = GETPOST('client_email', 'restricthtml');
-	$clientPhone = GETPOST('client_phone', 'alphanohtml');
-	$siteName = GETPOST('site_name', 'restricthtml');
-	$siteAddress = GETPOST('site_address', 'restricthtml');
-	$siteZip = GETPOST('site_zip', 'alphanohtml');
-	$siteTown = GETPOST('site_town', 'restricthtml');
-	$prm = GETPOST('prm', 'alphanohtml');
-	$typeReseau = GETPOST('type_reseau', 'alphanohtml');
-	$typeExploitation = GETPOST('type_exploitation', 'alphanohtml');
-	$puissanceInstallee = (float) price2num(GETPOST('puissance_installee_kwc', 'alphanohtml'));
-	$puissanceInjection = (float) price2num(GETPOST('puissance_injection_kva', 'alphanohtml'));
-	$signataireNom = GETPOST('signataire_nom', 'restricthtml');
-	$signataireFonction = GETPOST('signataire_fonction', 'restricthtml');
-	$signataireEmail = GETPOST('signataire_email', 'restricthtml');
-	$mandatAcceptance = GETPOST('mandat_acceptance', 'alphanohtml');
+	$clientType = $formClientType;
+	$clientName = $formClientName;
+	$clientSiret = preg_replace('/\D+/', '', $formClientSiret);
+	$clientSiret = is_string($clientSiret) ? $clientSiret : '';
+	$clientEmail = $formClientEmail;
+	$clientPhone = $formClientPhone;
+	$siteName = $formSiteName;
+	$siteAddress = $formSiteAddress;
+	$siteZip = $formSiteZip;
+	$siteTown = $formSiteTown;
+	$prm = $formPrm;
+	$typeReseau = $formTypeReseau;
+	$typeExploitation = $formTypeExploitation;
+	$puissanceInstallee = (float) price2num($formPuissanceInstallee);
+	$puissanceInjection = (float) price2num($formPuissanceInjection);
+	$signataireNom = $formSignataireNom;
+	$signataireFonction = $formSignataireFonction;
+	$signataireEmail = $formSignataireEmail;
+	$mandatAcceptance = $formMandatAcceptance;
 	$signatureDataUrl = GETPOST('signature_data_url', 'restricthtml');
 	$uploadErrors = array();
 	$uploadedPieceId = 0;
@@ -191,6 +213,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$publicSummary = array(
 		'client_type' => $clientType,
 		'client_name' => $clientName,
+		'client_siret' => $clientSiret,
 		'client_email' => $clientEmail,
 		'client_phone' => $clientPhone,
 		'uploaded_piece_id' => $uploadedPieceId,
@@ -210,6 +233,12 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$object->status = 4;
 	$object->context['trigger_reason'] = 'public_collecte_submitted';
 	$object->context['changed_fields'] = array('status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
+	if ($clientType === 'societe' && $clientSiret === '') {
+		$uploadErrors[] = $langs->trans('BeneficiarySiretRequired');
+	}
+	if ($clientSiret !== '' && !preg_match('/^\d{14}$/', $clientSiret)) {
+		$uploadErrors[] = $langs->trans('BeneficiarySiretInvalid');
+	}
 	if ($mandatAcceptance !== 'yes') {
 		$uploadErrors[] = $langs->trans('MandatAcceptanceRequired');
 	}
@@ -262,7 +291,8 @@ if ($linkUsable && $action === 'submit_collecte') {
 
 	if (empty($uploadErrors)) {
 		$publicSummary['signature_id'] = $signatureId;
-		$object->note_public = trim((string) $object->note_public."\n\n".$langs->trans('PublicCollecteSummary')."\n".json_encode($publicSummary));
+		$publicSummaryJson = json_encode($publicSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		$object->note_public = trim((string) $object->note_public."\n\n".$langs->trans('PublicCollecteSummary')."\n".(is_string($publicSummaryJson) ? $publicSummaryJson : ''));
 		$result = $object->update($user);
 		if ($result > 0) {
 			$publicLink->markSubmitted();

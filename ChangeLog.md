@@ -15,3 +15,4 @@
 - Complément de la configuration module, des filtres opérationnels de liste et de la recette fonctionnelle V1.
 - Remplacement des champs texte de modèles de courriels par des sélecteurs natifs Dolibarr filtrés par type d’objet.
 - Remplacement du champ texte du modèle PDF mandat ENEDIS par la gestion native des modèles de documents Dolibarr.
+- Correction de la désactivation du module en appelant `_remove()` avec la signature native Dolibarr.

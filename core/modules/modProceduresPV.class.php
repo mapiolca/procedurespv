@@ -302,6 +302,8 @@ class modProceduresPV extends DolibarrModules
 	 */
 	public function remove($options = '')
 	{
-		return $this->_remove($options);
+		$sql = array();
+
+		return $this->_remove($sql, $options);
 	}
 }
