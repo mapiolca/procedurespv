@@ -309,11 +309,238 @@ if ($linkUsable && $action === 'submit_collecte') {
 
 llxHeader('', $langs->trans('PublicCollecteTitle'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-public-collecte');
 
+print <<<'HTML'
+<style>
+.public-procedurespv {
+	min-height: calc(100vh - 70px);
+	padding: clamp(18px, 4vw, 46px);
+	background: linear-gradient(180deg, #f7fbfb 0%, #eef6f2 100%);
+	color: #1f2933;
+}
+.public-procedurespv * {
+	box-sizing: border-box;
+}
+.public-shell {
+	width: min(1120px, 100%);
+	margin: 0 auto;
+}
+.public-hero {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+	gap: clamp(16px, 3vw, 34px);
+	align-items: end;
+	margin-bottom: 24px;
+}
+.public-eyebrow {
+	margin-bottom: 8px;
+	font-size: 0.78rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0;
+	color: #0f766e;
+}
+.public-hero h1 {
+	margin: 0;
+	font-size: clamp(1.75rem, 3.2vw, 2.65rem);
+	line-height: 1.08;
+	font-weight: 800;
+	color: #172033;
+}
+.public-hero p {
+	max-width: 760px;
+	margin: 14px 0 0;
+	font-size: 1.02rem;
+	line-height: 1.55;
+	color: #526071;
+}
+.public-hero-aside {
+	border-left: 4px solid #0f766e;
+	padding: 12px 0 12px 16px;
+	color: #526071;
+	font-weight: 600;
+}
+.public-steps {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0 0 22px;
+	padding: 0;
+	list-style: none;
+}
+.public-steps li {
+	border: 1px solid #d7e3df;
+	border-radius: 999px;
+	background: #fff;
+	padding: 7px 12px;
+	font-size: 0.88rem;
+	font-weight: 700;
+	color: #344054;
+}
+.public-section {
+	margin: 16px 0;
+	padding: clamp(16px, 2.2vw, 24px);
+	border: 1px solid #dce7e3;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 12px 28px rgba(16, 24, 40, 0.07);
+}
+.public-section-header {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	margin-bottom: 14px;
+}
+.public-step {
+	display: inline-flex;
+	width: 34px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 999px;
+	background: #0f766e;
+	color: #fff;
+	font-weight: 800;
+}
+.public-section h2 {
+	margin: 0;
+	font-size: 1.16rem;
+	line-height: 1.3;
+	color: #172033;
+}
+.public-form-table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0 10px;
+}
+.public-form-table td {
+	border: 0;
+	padding: 0;
+	vertical-align: top;
+}
+.public-form-table td:first-child {
+	width: 31%;
+	padding-top: 9px;
+	padding-right: 18px;
+	font-weight: 700;
+	color: #46525f;
+}
+.public-form-table input.flat,
+.public-form-table select.flat {
+	width: min(100%, 560px);
+	min-height: 38px;
+	border: 1px solid #cbd8d4;
+	border-radius: 6px;
+	background: #fff;
+	padding: 8px 10px;
+	box-shadow: inset 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.public-form-table input[type="file"].flat {
+	padding: 7px;
+}
+.public-form-table tr[hidden] {
+	display: none !important;
+}
+.public-form-table .select2-container {
+	width: min(100%, 560px) !important;
+}
+.public-help {
+	display: block;
+	max-width: 620px;
+	margin-top: 5px;
+	color: #667085;
+	font-size: 0.84rem;
+	line-height: 1.4;
+}
+.public-unit-field {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	width: min(100%, 560px);
+}
+.public-unit-field input.flat {
+	width: min(160px, 100%);
+}
+.public-signature-pad {
+	width: min(100%, 620px);
+	height: 190px;
+	border: 1px solid #98a8a3;
+	border-radius: 8px;
+	background: #fff;
+	touch-action: none;
+	box-shadow: inset 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+.public-actions {
+	position: sticky;
+	bottom: 0;
+	z-index: 2;
+	margin-top: 18px;
+	padding: 14px 0 0;
+	text-align: right;
+	background: linear-gradient(180deg, rgba(238, 246, 242, 0), #eef6f2 38%);
+}
+.public-actions .button-save {
+	min-width: 220px;
+	padding: 10px 18px;
+	font-weight: 800;
+}
+@media (max-width: 760px) {
+	.public-procedurespv {
+		padding: 16px;
+	}
+	.public-hero {
+		grid-template-columns: 1fr;
+	}
+	.public-hero-aside {
+		border-left: 0;
+		border-top: 4px solid #0f766e;
+		padding: 12px 0 0;
+	}
+	.public-form-table,
+	.public-form-table tbody,
+	.public-form-table tr,
+	.public-form-table td {
+		display: block;
+		width: 100%;
+	}
+	.public-form-table {
+		border-spacing: 0;
+	}
+	.public-form-table tr {
+		margin-bottom: 13px;
+	}
+	.public-form-table td:first-child {
+		width: 100%;
+		padding: 0 0 5px;
+	}
+	.public-form-table input.flat,
+	.public-form-table select.flat,
+	.public-unit-field {
+		width: 100%;
+	}
+	.public-actions {
+		text-align: center;
+	}
+	.public-actions .button-save {
+		width: 100%;
+	}
+}
+</style>
+HTML;
+
 print '<main class="public-procedurespv">';
+print '<div class="public-shell">';
+print '<header class="public-hero">';
+print '<div>';
+print '<div class="public-eyebrow">'.$langs->trans('PublicCollecteEyebrow').'</div>';
 print '<h1>'.$langs->trans('PublicCollecteTitle').'</h1>';
+print '<p>'.$langs->trans('PublicCollecteIntro').'</p>';
+print '</div>';
+print '<div class="public-hero-aside">'.$langs->trans('PublicCollecteAside').'</div>';
+print '</header>';
 
 if ($submissionDone) {
 	print '<div class="ok">'.$langs->trans('PublicCollecteSubmitted').'</div>';
+	print '</div>';
 	print '</main>';
 	llxFooter('', 'public');
 	$db->close();
@@ -322,78 +549,119 @@ if ($submissionDone) {
 
 if (!$linkUsable) {
 	print '<div class="warning">'.$langs->trans('PublicLinkUnavailable').'</div>';
+	print '</div>';
 	print '</main>';
 	llxFooter('', 'public');
 	$db->close();
 	exit;
 }
 
-print '<p class="opacitymedium">'.$langs->trans('PublicCollecteIntro').'</p>';
-print '<form method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
+print '<ul class="public-steps">';
+print '<li>01 '.$langs->trans('PublicSectionClient').'</li>';
+print '<li>02 '.$langs->trans('PublicSectionSite').'</li>';
+print '<li>03 '.$langs->trans('PublicSectionProject').'</li>';
+print '<li>04 '.$langs->trans('PublicSectionPieces').'</li>';
+print '<li>05 '.$langs->trans('PublicSectionMandat').'</li>';
+print '</ul>';
+
+print '<form class="public-collecte-form" method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="public_token" value="'.dol_escape_htmltag($publicToken).'">';
 print '<input type="hidden" name="action" value="submit_collecte">';
 
-print '<h2>'.$langs->trans('PublicSectionClient').'</h2>';
-print '<table class="border centpercent">';
+print '<section class="public-section">';
+print '<div class="public-section-header"><span class="public-step">1</span><h2>'.$langs->trans('PublicSectionClient').'</h2></div>';
+print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('ClientType').'</td><td><select class="flat minwidth200" name="client_type" id="client_type">';
 foreach (array('particulier' => 'ClientTypeIndividual', 'societe' => 'ClientTypeCompany', 'collectivite' => 'ClientTypePublicEntity', 'association' => 'ClientTypeAssociation') as $value => $labelKey) {
-	print '<option value="'.dol_escape_htmltag($value).'">'.$langs->trans($labelKey).'</option>';
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formClientType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('client_type').'</td></tr>';
-print '<tr><td>'.$langs->trans('NameOrCompany').'</td><td><input type="text" class="flat minwidth300" name="client_name"></td></tr>';
-print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" value="'.dol_escape_htmltag((string) $publicLink->email_destinataire).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone"></td></tr>';
+print '<tr><td>'.$langs->trans('NameOrCompany').'</td><td><input type="text" class="flat minwidth300" name="client_name" autocomplete="organization" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
+print '<tr id="client-siret-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}"'.($formClientType === 'societe' ? ' required' : '').' value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" autocomplete="email" value="'.dol_escape_htmltag($formClientEmail).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
 print '</table>';
+print '</section>';
 
-print '<h2>'.$langs->trans('PublicSectionSite').'</h2>';
-print '<table class="border centpercent">';
-print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" value="'.dol_escape_htmltag((string) $object->site_name_snapshot).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" value="'.dol_escape_htmltag((string) $object->site_address_snapshot).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" value="'.dol_escape_htmltag((string) $object->site_zip_snapshot).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="site_town" value="'.dol_escape_htmltag((string) $object->site_town_snapshot).'"></td></tr>';
-print '<tr><td>'.$langs->trans('PRM').'</td><td><input type="text" class="flat minwidth200" name="prm" value="'.dol_escape_htmltag((string) $object->prm).'"></td></tr>';
+print '<section class="public-section">';
+print '<div class="public-section-header"><span class="public-step">2</span><h2>'.$langs->trans('PublicSectionSite').'</h2></div>';
+print '<table class="public-form-table">';
+print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" value="'.dol_escape_htmltag($formSiteName).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" value="'.dol_escape_htmltag($formSiteAddress).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="site_town" autocomplete="address-level2" value="'.dol_escape_htmltag($formSiteTown).'"></td></tr>';
+print '<tr><td>'.$langs->trans('PRM').'</td><td><input type="text" class="flat minwidth200" name="prm" value="'.dol_escape_htmltag($formPrm).'"></td></tr>';
 print '<tr><td>'.$langs->trans('NetworkType').'</td><td><select class="flat minwidth200" name="type_reseau" id="type_reseau">';
 foreach (array('monophase' => 'NetworkMonophase', 'triphase' => 'NetworkTriphase', 'unknown' => 'Unknown') as $value => $labelKey) {
-	print '<option value="'.dol_escape_htmltag($value).'"'.($object->type_reseau === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formTypeReseau === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_reseau').'</td></tr>';
 print '</table>';
+print '</section>';
 
-print '<h2>'.$langs->trans('PublicSectionProject').'</h2>';
-print '<table class="border centpercent">';
+print '<section class="public-section">';
+print '<div class="public-section-header"><span class="public-step">3</span><h2>'.$langs->trans('PublicSectionProject').'</h2></div>';
+print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('ExploitationType').'</td><td><select class="flat minwidth300" name="type_exploitation" id="type_exploitation">';
 foreach (array('autoconsommation_totale' => 'ExploitationAutoconsommationTotale', 'autoconsommation_surplus' => 'ExploitationAutoconsommationSurplus', 'injection_totale' => 'ExploitationInjectionTotale', 'autoconsommation_collective' => 'ExploitationAutoconsommationCollective') as $value => $labelKey) {
-	print '<option value="'.dol_escape_htmltag($value).'"'.($object->type_exploitation === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formTypeExploitation === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_exploitation').'</td></tr>';
-print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span></td></tr>';
-print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"> <span class="opacitymedium">kVA</span></td></tr>';
+print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag($formPuissanceInstallee).'"><span class="opacitymedium">kWc</span></span></td></tr>';
+print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag($formPuissanceInjection).'"><span class="opacitymedium">kVA</span></span></td></tr>';
 print '</table>';
+print '</section>';
 
-print '<h2>'.$langs->trans('PublicSectionPieces').'</h2>';
-print '<table class="border centpercent">';
-print '<tr><td class="titlefield">'.$langs->trans('PieceFactureElectricite').'</td><td><input type="file" class="flat" name="piece_facture_electricite"></td></tr>';
+print '<section class="public-section">';
+print '<div class="public-section-header"><span class="public-step">4</span><h2>'.$langs->trans('PublicSectionPieces').'</h2></div>';
+print '<table class="public-form-table">';
+print '<tr><td class="titlefield">'.$langs->trans('PieceFactureElectricite').'</td><td><input type="file" class="flat" name="piece_facture_electricite"><span class="public-help">'.$langs->trans('PublicElectricityBillHelp').'</span></td></tr>';
 print '</table>';
+print '</section>';
 
-print '<h2>'.$langs->trans('PublicSectionMandat').'</h2>';
-print '<table class="border centpercent">';
-print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerFunction').'</td><td><input type="text" class="flat minwidth300" name="signataire_fonction"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerEmail').'</td><td><input type="email" class="flat minwidth300" name="signataire_email" value="'.dol_escape_htmltag((string) $publicLink->email_destinataire).'"></td></tr>';
-print '<tr><td>'.$langs->trans('MandatAcceptance').'</td><td><select class="flat minwidth300" name="mandat_acceptance" id="mandat_acceptance"><option value="no">'.$langs->trans('No').'</option><option value="yes">'.$langs->trans('Yes').'</option></select>'.ajax_combobox('mandat_acceptance').'</td></tr>';
+print '<section class="public-section">';
+print '<div class="public-section-header"><span class="public-step">5</span><h2>'.$langs->trans('PublicSectionMandat').'</h2></div>';
+print '<table class="public-form-table">';
+print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" autocomplete="name" value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
+print '<tr><td>'.$langs->trans('SignerFunction').'</td><td><input type="text" class="flat minwidth300" name="signataire_fonction" value="'.dol_escape_htmltag($formSignataireFonction).'"></td></tr>';
+print '<tr><td>'.$langs->trans('SignerEmail').'</td><td><input type="email" class="flat minwidth300" name="signataire_email" autocomplete="email" value="'.dol_escape_htmltag($formSignataireEmail).'"></td></tr>';
+print '<tr><td>'.$langs->trans('MandatAcceptance').'</td><td><select class="flat minwidth300" name="mandat_acceptance" id="mandat_acceptance"><option value="no"'.($formMandatAcceptance === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option><option value="yes"'.($formMandatAcceptance === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option></select>'.ajax_combobox('mandat_acceptance').'</td></tr>';
 print '<tr><td>'.$langs->trans('Signature').'</td><td>';
-print '<canvas id="mandat-signature-pad" width="520" height="180" style="border:1px solid #888;max-width:100%;touch-action:none;background:#fff"></canvas>';
+print '<canvas class="public-signature-pad" id="mandat-signature-pad" width="620" height="190"></canvas>';
 print '<input type="hidden" name="signature_data_url" id="signature_data_url">';
+print '<span class="public-help">'.$langs->trans('PublicSignatureHelp').'</span>';
 print '<br><button type="button" class="button" id="clear-signature">'.$langs->trans('ClearSignature').'</button>';
 print '</td></tr>';
 print '</table>';
+print '</section>';
 
 print '<script>
 (function () {
+	var clientType = document.getElementById("client_type");
+	var siretRow = document.getElementById("client-siret-row");
+	var siretInput = document.getElementById("client_siret");
 	var canvas = document.getElementById("mandat-signature-pad");
 	var hidden = document.getElementById("signature_data_url");
 	var clearButton = document.getElementById("clear-signature");
+	function refreshSiret() {
+		if (!clientType || !siretRow || !siretInput) return;
+		var required = clientType.value === "societe";
+		siretRow.hidden = !required;
+		siretInput.required = required;
+		if (!required) {
+			siretInput.value = "";
+		}
+	}
+	if (clientType) {
+		clientType.addEventListener("change", refreshSiret);
+		refreshSiret();
+	}
+	if (siretInput) {
+		siretInput.addEventListener("input", function () {
+			this.value = this.value.replace(/\\D/g, "").slice(0, 14);
+		});
+	}
 	if (!canvas || !hidden) return;
 	var ctx = canvas.getContext("2d");
 	var drawing = false;
@@ -446,8 +714,9 @@ print '<script>
 }());
 </script>';
 
-print '<div class="center"><input type="submit" class="button button-save" value="'.$langs->trans('SubmitCollecte').'"></div>';
+print '<div class="public-actions"><input type="submit" class="button button-save" value="'.$langs->trans('SubmitCollecte').'"></div>';
 print '</form>';
+print '</div>';
 print '</main>';
 
 llxFooter('', 'public');
