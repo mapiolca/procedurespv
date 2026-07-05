@@ -147,14 +147,22 @@ class modProceduresPV extends DolibarrModules
 		$this->menu = array();
 		$r = 0;
 
-		$centralepvEnabled = false;
-		if (function_exists('isModEnabled')) {
-			$centralepvEnabled = isModEnabled('centralepv') || isModEnabled('centrale_pv') || isModEnabled('centralespv');
-		} elseif (is_object($conf)) {
-			$centralepvEnabled = !empty($conf->centralepv->enabled) || !empty($conf->centrale_pv->enabled) || !empty($conf->centralespv->enabled);
+		$centralepvModuleKey = '';
+		if (getDolGlobalInt('PROCEDURESPV_USE_CENTRALEPV_IF_AVAILABLE', 1) > 0) {
+			foreach (array('powerplantpv', 'centralepv', 'centrale_pv', 'centralespv') as $candidateModuleKey) {
+				if (function_exists('isModEnabled') && isModEnabled($candidateModuleKey)) {
+					$centralepvModuleKey = $candidateModuleKey;
+					break;
+				}
+				if (is_object($conf) && !empty($conf->{$candidateModuleKey}->enabled)) {
+					$centralepvModuleKey = $candidateModuleKey;
+					break;
+				}
+			}
 		}
 
-		$mainmenu = $centralepvEnabled ? 'centralepv' : 'procedurespv';
+		$centralepvEnabled = $centralepvModuleKey !== '';
+		$mainmenu = $centralepvEnabled ? $centralepvModuleKey : 'procedurespv';
 
 		if (!$centralepvEnabled) {
 			$this->menu[$r++] = array(
@@ -255,6 +263,8 @@ class modProceduresPV extends DolibarrModules
 			'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE' => '',
 			'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT' => '',
 			'PROCEDURESPV_RACCORDEMENT_ADDON' => 'mod_pvproc_standard',
+			'PROCEDURESPV_RACCORDEMENT_STANDARD_MASK' => 'DDR{yyyy}{mm}-{0000}',
+			'PROCEDURESPV_RACCORDEMENT_ADVANCED_MASK' => 'DDR{yyyy}{mm}-{0000}',
 			'PROCEDURESPV_MANDATENEDIS_ADDON_PDF' => $mandatPdfModel,
 			'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS' => 'mandatenedis',
 		);

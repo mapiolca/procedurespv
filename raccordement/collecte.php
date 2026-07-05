@@ -43,7 +43,7 @@ $publicLink = new PublicLink($db);
 
 $pieceActions = array('validate_piece', 'refuse_piece');
 $signatureActions = array('validate_mandat', 'refuse_mandat');
-if (($action === 'generate_link' || $action === 'revoke_link' || in_array($action, $pieceActions, true) || in_array($action, $signatureActions, true)) && !GETPOST('token', 'alpha')) {
+if (($action === 'generate_link' || $action === 'revoke_link' || in_array($action, $pieceActions, true) || in_array($action, $signatureActions, true)) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 

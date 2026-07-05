@@ -263,7 +263,7 @@ class PublicLink extends CommonObject
 	 */
 	public function getPublicUrl($token)
 	{
-		return dol_buildpath('/procedurespv/public/raccordement_collecte.php', 1).'?token='.urlencode($token);
+		return dol_buildpath('/procedurespv/public/raccordement_collecte.php', 3).'?public_token='.urlencode($token);
 	}
 
 	/**

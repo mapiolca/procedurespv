@@ -72,9 +72,6 @@ function procedurespvLoadMandatEnedisPdfModel($db)
 }
 
 $publicToken = GETPOST('public_token', 'alphanohtml');
-if ($publicToken === '') {
-	$publicToken = GETPOST('token', 'alphanohtml');
-}
 $action = GETPOST('action', 'aZ09');
 $submissionDone = false;
 
@@ -107,7 +104,7 @@ if ($linkUsable && $action !== 'submit_collecte') {
 }
 
 if ($linkUsable && $action === 'submit_collecte') {
-	if (!GETPOST('token', 'alphanohtml') && !GETPOST('public_token', 'alphanohtml')) {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
 
@@ -240,7 +237,8 @@ if ($linkUsable && $action === 'submit_collecte') {
 				'signature_user_agent' => $userAgent,
 			));
 			if ($pdfFilename === '') {
-				$errorKey = !empty($pdfModel->error) ? (string) $pdfModel->error : 'ErrorPdfNotGenerated';
+				$pdfModelProperties = get_object_vars($pdfModel);
+				$errorKey = (!empty($pdfModelProperties['error']) && is_scalar($pdfModelProperties['error'])) ? (string) $pdfModelProperties['error'] : 'ErrorPdfNotGenerated';
 				$uploadErrors[] = $langs->trans($errorKey);
 			} else {
 				$pdfHash = hash_file('sha256', $uploadDir.'/'.$pdfFilename);
@@ -339,8 +337,8 @@ foreach (array('autoconsommation_totale' => 'ExploitationAutoconsommationTotale'
 	print '<option value="'.dol_escape_htmltag($value).'"'.($object->type_exploitation === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_exploitation').'</td></tr>';
-print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"></td></tr>';
-print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"></td></tr>';
+print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span></td></tr>';
+print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"> <span class="opacitymedium">kVA</span></td></tr>';
 print '</table>';
 
 print '<h2>'.$langs->trans('PublicSectionPieces').'</h2>';

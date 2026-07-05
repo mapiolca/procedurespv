@@ -9,6 +9,8 @@
 
 require '../../../main.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.formprojet.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/doleditor.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/relance.class.php', 0);
@@ -28,6 +30,7 @@ if (!isModEnabled('procedurespv')) {
 
 $object = new Raccordement($db);
 $form = new Form($db);
+$formproject = new FormProjets($db);
 $centralePVAdapter = new CentralePVAdapter($db);
 
 $permissiontoread = procedurespvCanDo($user, 'raccordement', 'read');
@@ -63,10 +66,211 @@ $statusActions = array(
 	'close' => array('permission' => 'write', 'status' => 16, 'message' => 'RaccordementClosed'),
 	'cancel' => array('permission' => 'write', 'status' => -1, 'message' => 'RaccordementCanceled'),
 );
-$sensitiveActions = array_merge(array('add', 'update', 'freeze_snapshot'), array_keys($statusActions));
+$sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_snapshot'), array_keys($statusActions));
 
-if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
+if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
+}
+
+/**
+ * Return site source choices.
+ *
+ * @return array<string, string>
+ */
+function procedurespvGetSiteSourceOptions()
+{
+	return array(
+		'local' => 'SiteSourceLocal',
+		'centralepv' => 'SiteSourceCentralePV',
+	);
+}
+
+/**
+ * Return exploitation type choices.
+ *
+ * @return array<string, string>
+ */
+function procedurespvGetExploitationTypeOptions()
+{
+	return array(
+		'autoconsommation_totale' => 'ExploitationAutoconsommationTotale',
+		'autoconsommation_surplus' => 'ExploitationAutoconsommationSurplus',
+		'injection_totale' => 'ExploitationInjectionTotale',
+		'autoconsommation_collective' => 'ExploitationAutoconsommationCollective',
+	);
+}
+
+/**
+ * Return fields editable directly from the draft card.
+ *
+ * @return array<string, string>
+ */
+function procedurespvGetDraftEditableFields()
+{
+	return array(
+		'fk_soc' => 'integer',
+		'fk_project' => 'integer',
+		'fk_centrale_pv' => 'integer',
+		'site_source' => 'site_source',
+		'site_name_snapshot' => 'text',
+		'site_address_snapshot' => 'text',
+		'site_zip_snapshot' => 'text',
+		'site_town_snapshot' => 'text',
+		'prm' => 'text',
+		'type_exploitation' => 'type_exploitation',
+		'puissance_installee_kwc' => 'number',
+		'puissance_injection_kva' => 'number',
+		'ref_enedis' => 'text',
+		'fk_user_resp' => 'integer',
+	);
+}
+
+/**
+ * Render a select with translated options.
+ *
+ * @param string $htmlName Input name
+ * @param array<string, string> $options Options
+ * @param string $selected Selected value
+ * @param string $cssClass CSS class
+ * @return string
+ */
+function procedurespvRenderTranslatedSelect($htmlName, array $options, $selected, $cssClass = 'flat minwidth200')
+{
+	global $langs;
+
+	$htmlId = preg_replace('/[^a-zA-Z0-9_]/', '_', $htmlName);
+	$out = '<select class="'.dol_escape_htmltag($cssClass).'" name="'.dol_escape_htmltag($htmlName).'" id="'.dol_escape_htmltag($htmlId).'">';
+	$out .= '<option value="">&nbsp;</option>';
+	foreach ($options as $value => $labelKey) {
+		$out .= '<option value="'.dol_escape_htmltag($value).'"'.($selected === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+	}
+	$out .= '</select>';
+	if (function_exists('ajax_combobox')) {
+		$out .= ajax_combobox($htmlId);
+	}
+
+	return $out;
+}
+
+/**
+ * Return the input HTML for a draft editable field.
+ *
+ * @param Raccordement $object Current object
+ * @param string $field Field name
+ * @param Form $form Form helper
+ * @param FormProjets $formproject Project form helper
+ * @param CentralePVAdapter $centralePVAdapter Centrale PV adapter
+ * @return string
+ */
+function procedurespvRenderDraftFieldInput($object, $field, $form, $formproject, $centralePVAdapter)
+{
+	global $langs;
+
+	switch ($field) {
+		case 'fk_soc':
+			return $form->select_company((int) $object->fk_soc, 'fieldvalue', '', 1);
+
+		case 'fk_project':
+			if (isModEnabled('project')) {
+				$socidforproject = (int) $object->fk_soc;
+				return $formproject->select_projects(($socidforproject > 0 ? $socidforproject : -1), (int) $object->fk_project, 'fieldvalue', 0, 0, 1, 1, 0, 0, 0, '', 1, 0, 'maxwidth500 widthcentpercentminusxx');
+			}
+			return '<input type="hidden" name="fieldvalue" value="0"><span class="opacitymedium">'.dol_escape_htmltag($langs->trans('ProjectModuleDisabled')).'</span>';
+
+		case 'fk_centrale_pv':
+			if ($centralePVAdapter->isAvailable()) {
+				$centraleOptions = $centralePVAdapter->getCentraleOptions((int) $object->fk_centrale_pv);
+				if (!empty($centraleOptions)) {
+					$out = $form->selectarray('fieldvalue', $centraleOptions, (int) $object->fk_centrale_pv, 1, 0, 0, '', 0, 0, 0, '', 'flat maxwidth500 widthcentpercentminusxx');
+					$out .= ajax_combobox('fieldvalue');
+					return $out;
+				}
+			}
+			return '<input type="number" class="flat width100" name="fieldvalue" value="'.((int) $object->fk_centrale_pv).'">';
+
+		case 'site_source':
+			return procedurespvRenderTranslatedSelect('fieldvalue', procedurespvGetSiteSourceOptions(), (string) $object->site_source);
+
+		case 'type_exploitation':
+			return procedurespvRenderTranslatedSelect('fieldvalue', procedurespvGetExploitationTypeOptions(), (string) $object->type_exploitation, 'flat minwidth300');
+
+		case 'puissance_installee_kwc':
+			return '<input type="text" class="flat width100 right" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span>';
+
+		case 'puissance_injection_kva':
+			return '<input type="text" class="flat width100 right" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"> <span class="opacitymedium">kVA</span>';
+
+		case 'fk_user_resp':
+			return $form->select_dolusers(((int) $object->fk_user_resp > 0 ? (int) $object->fk_user_resp : ''), 'fieldvalue', 1, null, 0, '', '', '0', 0, 0, '', 0, '', 'maxwidth300');
+
+		case 'site_address_snapshot':
+			return '<input type="text" class="flat minwidth500" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->site_address_snapshot).'">';
+
+		case 'site_name_snapshot':
+			return '<input type="text" class="flat minwidth300" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->site_name_snapshot).'">';
+
+		case 'site_zip_snapshot':
+			return '<input type="text" class="flat maxwidth100" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->site_zip_snapshot).'">';
+
+		case 'site_town_snapshot':
+			return '<input type="text" class="flat minwidth300" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->site_town_snapshot).'">';
+
+		case 'prm':
+			return '<input type="text" class="flat minwidth200" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->prm).'">';
+
+		case 'ref_enedis':
+			return '<input type="text" class="flat minwidth200" name="fieldvalue" value="'.dol_escape_htmltag((string) $object->ref_enedis).'">';
+	}
+
+	return '';
+}
+
+/**
+ * Render a table row with independent draft edition.
+ *
+ * @param Raccordement $object Current object
+ * @param string $field Field name
+ * @param string $label Label
+ * @param string $valueHtml Display value
+ * @param string $inputHtml Input HTML
+ * @param bool $canEditDraft Can edit
+ * @param string $fieldToEdit Edited field
+ * @return void
+ */
+function procedurespvPrintDraftEditableRow($object, $field, $label, $valueHtml, $inputHtml, $canEditDraft, $fieldToEdit)
+{
+	global $langs;
+
+	$urlcard = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id;
+	$rowId = 'field_'.$field;
+	print '<tr class="field_'.$field.'" id="'.dol_escape_htmltag($rowId).'">';
+	print '<td class="titlefieldmiddle">'.$label.'</td>';
+	if ($canEditDraft && $fieldToEdit === $field) {
+		$formId = 'form_'.$field;
+		print '<td>';
+		print '<form id="'.dol_escape_htmltag($formId).'" method="POST" action="'.dol_escape_htmltag($urlcard).'">';
+		print '<input type="hidden" name="token" value="'.newToken().'">';
+		print '<input type="hidden" name="action" value="updatefield">';
+		print '<input type="hidden" name="id" value="'.((int) $object->id).'">';
+		print '<input type="hidden" name="field" value="'.dol_escape_htmltag($field).'">';
+		print $inputHtml;
+		print '</form>';
+		print '</td>';
+		print '<td class="right nowraponall">';
+		print '<button type="submit" form="'.dol_escape_htmltag($formId).'" class="reposition" title="'.dol_escape_htmltag($langs->trans('Save')).'">'.img_picto($langs->trans('Save'), 'tick').'</button>';
+		print ' <a class="reposition" href="'.dol_escape_htmltag($urlcard).'#'.dol_escape_htmltag($rowId).'" title="'.dol_escape_htmltag($langs->trans('Cancel')).'">'.img_picto($langs->trans('Cancel'), 'cancel').'</a>';
+		print '</td>';
+	} else {
+		print '<td>'.$valueHtml.'</td>';
+		print '<td class="right nowraponall">';
+		if ($canEditDraft) {
+			print '<a class="editfielda reposition" href="'.dol_escape_htmltag($urlcard).'&action=editfield&field='.urlencode($field).'&token='.newToken().'#'.dol_escape_htmltag($rowId).'">'.img_edit($langs->transnoentitiesnoconv('Modify'), 0).'</a>';
+		} else {
+			print '&nbsp;';
+		}
+		print '</td>';
+	}
+	print '</tr>';
 }
 
 if ($action === 'add' && $permissiontoadd) {
@@ -123,6 +327,94 @@ if ($action === 'update' && $permissiontoadd && $object->id > 0) {
 
 	setEventMessages($object->error, $object->errors, 'errors');
 	$action = 'edit';
+}
+
+if ($action === 'updatefield' && $permissiontoadd && $object->id > 0) {
+	if ((int) $object->status !== 0) {
+		accessforbidden($langs->trans('ErrorForbidden'));
+	}
+
+	$field = preg_replace('/[^a-zA-Z0-9_]/', '', GETPOST('field', 'nohtml'));
+	$editableFields = procedurespvGetDraftEditableFields();
+	if (!array_key_exists($field, $editableFields)) {
+		accessforbidden($langs->trans('ErrorForbidden'));
+	}
+
+	$object->oldcopy = clone $object;
+	$object->context['trigger_reason'] = 'draft_field_update';
+	$object->context['changed_fields'] = array($field);
+
+	switch ($field) {
+		case 'fk_soc':
+			$object->fk_soc = GETPOSTINT('fieldvalue') > 0 ? GETPOSTINT('fieldvalue') : null;
+			break;
+
+		case 'fk_project':
+			$object->fk_project = GETPOSTINT('fieldvalue') > 0 ? GETPOSTINT('fieldvalue') : null;
+			break;
+
+		case 'fk_centrale_pv':
+			$object->fk_centrale_pv = GETPOSTINT('fieldvalue') > 0 ? GETPOSTINT('fieldvalue') : null;
+			break;
+
+		case 'site_source':
+			$fieldValue = GETPOST('fieldvalue', 'aZ09');
+			$siteSources = procedurespvGetSiteSourceOptions();
+			$object->site_source = array_key_exists($fieldValue, $siteSources) ? $fieldValue : 'local';
+			break;
+
+		case 'type_exploitation':
+			$fieldValue = GETPOST('fieldvalue', 'alphanohtml');
+			$types = procedurespvGetExploitationTypeOptions();
+			$object->type_exploitation = ($fieldValue === '' || array_key_exists($fieldValue, $types)) ? $fieldValue : '';
+			break;
+
+		case 'puissance_installee_kwc':
+			$object->puissance_installee_kwc = (float) price2num(GETPOST('fieldvalue', 'alphanohtml'));
+			break;
+
+		case 'puissance_injection_kva':
+			$object->puissance_injection_kva = (float) price2num(GETPOST('fieldvalue', 'alphanohtml'));
+			break;
+
+		case 'site_address_snapshot':
+			$object->site_address_snapshot = GETPOST('fieldvalue', 'restricthtml');
+			break;
+
+		case 'site_name_snapshot':
+			$object->site_name_snapshot = GETPOST('fieldvalue', 'alphanohtml');
+			break;
+
+		case 'site_zip_snapshot':
+			$object->site_zip_snapshot = GETPOST('fieldvalue', 'alphanohtml');
+			break;
+
+		case 'site_town_snapshot':
+			$object->site_town_snapshot = GETPOST('fieldvalue', 'alphanohtml');
+			break;
+
+		case 'prm':
+			$object->prm = GETPOST('fieldvalue', 'alphanohtml');
+			break;
+
+		case 'ref_enedis':
+			$object->ref_enedis = GETPOST('fieldvalue', 'alphanohtml');
+			break;
+
+		case 'fk_user_resp':
+			$object->fk_user_resp = GETPOSTINT('fieldvalue') > 0 ? GETPOSTINT('fieldvalue') : null;
+			break;
+	}
+
+	$result = $object->update($user);
+	if ($result > 0) {
+		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
+		header('Location: '.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'#field_'.$field);
+		exit;
+	}
+
+	setEventMessages($object->error, $object->errors, 'errors');
+	$action = 'editfield';
 }
 
 if (isset($statusActions[$action]) && $object->id > 0) {
@@ -186,10 +478,25 @@ if ($action === 'create' || $action === 'edit') {
 	print $form->select_company($object->fk_soc, 'fk_soc', '', 1);
 	print '</td></tr>';
 
-	print '<tr><td>'.$langs->trans('Project').'</td><td><input type="number" class="flat width100" name="fk_project" value="'.((int) $object->fk_project).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('Project').'</td><td>';
+	if (isModEnabled('project')) {
+		$socidforproject = (int) $object->fk_soc;
+		print $formproject->select_projects(($socidforproject > 0 ? $socidforproject : -1), (int) $object->fk_project, 'fk_project', 0, 0, 1, 1, 0, 0, 0, '', 1, 0, 'maxwidth500 widthcentpercentminusxx');
+	} else {
+		print '<input type="hidden" name="fk_project" value="0">';
+		print '<span class="opacitymedium">'.$langs->trans('ProjectModuleDisabled').'</span>';
+	}
+	print '</td></tr>';
 	print '<tr><td>'.$langs->trans('CentralePV').'</td><td>';
 	if ($centralePVAdapter->isAvailable()) {
-		print '<input type="number" class="flat width100" name="fk_centrale_pv" value="'.((int) $object->fk_centrale_pv).'"> ';
+		$centraleOptions = $centralePVAdapter->getCentraleOptions((int) $object->fk_centrale_pv);
+		if (!empty($centraleOptions)) {
+			print $form->selectarray('fk_centrale_pv', $centraleOptions, (int) $object->fk_centrale_pv, 1, 0, 0, '', 0, 0, 0, '', 'flat maxwidth500 widthcentpercentminusxx');
+			print ajax_combobox('fk_centrale_pv');
+			print ' ';
+		} else {
+			print '<input type="number" class="flat width100" name="fk_centrale_pv" value="'.((int) $object->fk_centrale_pv).'"> ';
+		}
 		print '<span class="opacitymedium">'.$langs->trans('CentralePVAdapterAvailable').'</span>';
 	} else {
 		print '<input type="hidden" name="fk_centrale_pv" value="0">';
@@ -229,11 +536,19 @@ if ($action === 'create' || $action === 'edit') {
 	print ajax_combobox('type_exploitation');
 	print '</td></tr>';
 
-	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"></td></tr>';
-	print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"> <span class="opacitymedium">kVA</span></td></tr>';
 	print '<tr><td>'.$langs->trans('Responsible').'</td><td><input type="number" class="flat width100" name="fk_user_resp" value="'.((int) $object->fk_user_resp).'"></td></tr>';
-	print '<tr><td>'.$langs->trans('NotePublic').'</td><td><textarea class="flat centpercent" name="note_public" rows="3">'.dol_escape_htmltag((string) $object->note_public).'</textarea></td></tr>';
-	print '<tr><td>'.$langs->trans('NotePrivate').'</td><td><textarea class="flat centpercent" name="note_private" rows="3">'.dol_escape_htmltag((string) $object->note_private).'</textarea></td></tr>';
+	$useWysiwygPublic = isModEnabled('fckeditor') && getDolGlobalInt('FCKEDITOR_ENABLE_NOTE_PUBLIC') > 0;
+	$useWysiwygPrivate = isModEnabled('fckeditor') && getDolGlobalInt('FCKEDITOR_ENABLE_NOTE_PRIVATE') > 0;
+	print '<tr><td>'.$langs->trans('NotePublic').'</td><td>';
+	$doleditor = new DolEditor('note_public', (string) $object->note_public, '', 160, 'dolibarr_notes', '', false, true, $useWysiwygPublic, 4, '90%');
+	print $doleditor->Create(1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('NotePrivate').'</td><td>';
+	$doleditor = new DolEditor('note_private', (string) $object->note_private, '', 160, 'dolibarr_notes', '', false, true, $useWysiwygPrivate, 4, '90%');
+	print $doleditor->Create(1);
+	print '</td></tr>';
 	print '</table>';
 
 	print '<div class="center">';
@@ -262,46 +577,63 @@ if ($action === 'create' || $action === 'edit') {
 
 	$relanceFetcher = new Relance($db);
 	$relanceSummary = $relanceFetcher->getSummaryByRaccordement((int) $object->id);
+	$canEditDraftFields = $permissiontoadd && (int) $object->status === 0;
+	$fieldToEdit = ($action === 'editfield') ? preg_replace('/[^a-zA-Z0-9_]/', '', GETPOST('field', 'nohtml')) : '';
+	if (!$canEditDraftFields || !array_key_exists($fieldToEdit, procedurespvGetDraftEditableFields())) {
+		$fieldToEdit = '';
+	}
+	$siteSourceOptions = procedurespvGetSiteSourceOptions();
+	$exploitationTypeOptions = procedurespvGetExploitationTypeOptions();
 
 	print '<div class="fichecenter">';
 	print '<div class="fichehalfleft">';
 	print '<table class="border centpercent tableforfield">';
-	print '<tr><td class="titlefield">'.$langs->trans('ThirdParty').'</td><td>'.((int) $object->fk_soc > 0 ? '<a href="'.DOL_URL_ROOT.'/societe/card.php?socid='.((int) $object->fk_soc).'">'.((int) $object->fk_soc).'</a>' : '').'</td></tr>';
-	print '<tr><td>'.$langs->trans('Project').'</td><td>'.((int) $object->fk_project > 0 ? '<a href="'.DOL_URL_ROOT.'/projet/card.php?id='.((int) $object->fk_project).'">'.((int) $object->fk_project).'</a>' : '').'</td></tr>';
-	print '<tr><td>'.$langs->trans('CentralePV').'</td><td>';
+	$thirdpartyValue = ((int) $object->fk_soc > 0 ? '<a href="'.DOL_URL_ROOT.'/societe/card.php?socid='.((int) $object->fk_soc).'">'.((int) $object->fk_soc).'</a>' : '');
+	procedurespvPrintDraftEditableRow($object, 'fk_soc', $langs->trans('ThirdParty'), $thirdpartyValue, procedurespvRenderDraftFieldInput($object, 'fk_soc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+
+	$projectValue = ((int) $object->fk_project > 0 ? '<a href="'.DOL_URL_ROOT.'/projet/card.php?id='.((int) $object->fk_project).'">'.((int) $object->fk_project).'</a>' : '');
+	procedurespvPrintDraftEditableRow($object, 'fk_project', $langs->trans('Project'), $projectValue, procedurespvRenderDraftFieldInput($object, 'fk_project', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+
+	$centraleValue = '';
 	if ((int) $object->fk_centrale_pv > 0) {
 		$centraleLabel = $centralePVAdapter->getCentraleLabel((int) $object->fk_centrale_pv);
 		$centraleUrl = $centralePVAdapter->getCentraleUrl((int) $object->fk_centrale_pv);
 		if ($centraleUrl !== '') {
-			print '<a href="'.$centraleUrl.'">'.dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv).'</a>';
+			$centraleValue = '<a href="'.$centraleUrl.'">'.dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv).'</a>';
 		} else {
-			print dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv);
+			$centraleValue = dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv);
 		}
 	}
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('SiteName').'</td><td>'.dol_escape_htmltag((string) $object->site_name_snapshot).'</td></tr>';
-	print '<tr><td>'.$langs->trans('Address').'</td><td>'.dol_escape_htmltag((string) $object->site_address_snapshot).'</td></tr>';
-	print '<tr><td>'.$langs->trans('Zip').'</td><td>'.dol_escape_htmltag((string) $object->site_zip_snapshot).'</td></tr>';
-	print '<tr><td>'.$langs->trans('Town').'</td><td>'.dol_escape_htmltag((string) $object->site_town_snapshot).'</td></tr>';
-	print '<tr><td>'.$langs->trans('PRM').'</td><td>'.dol_escape_htmltag((string) $object->prm).'</td></tr>';
+	procedurespvPrintDraftEditableRow($object, 'fk_centrale_pv', $langs->trans('CentralePV'), $centraleValue, procedurespvRenderDraftFieldInput($object, 'fk_centrale_pv', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+
+	$siteSourceLabelKey = isset($siteSourceOptions[(string) $object->site_source]) ? $siteSourceOptions[(string) $object->site_source] : '';
+	procedurespvPrintDraftEditableRow($object, 'site_source', $langs->trans('SiteSource'), ($siteSourceLabelKey !== '' ? $langs->trans($siteSourceLabelKey) : ''), procedurespvRenderDraftFieldInput($object, 'site_source', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'site_name_snapshot', $langs->trans('SiteName'), dol_escape_htmltag((string) $object->site_name_snapshot), procedurespvRenderDraftFieldInput($object, 'site_name_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'site_address_snapshot', $langs->trans('Address'), dol_escape_htmltag((string) $object->site_address_snapshot), procedurespvRenderDraftFieldInput($object, 'site_address_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'site_zip_snapshot', $langs->trans('Zip'), dol_escape_htmltag((string) $object->site_zip_snapshot), procedurespvRenderDraftFieldInput($object, 'site_zip_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'site_town_snapshot', $langs->trans('Town'), dol_escape_htmltag((string) $object->site_town_snapshot), procedurespvRenderDraftFieldInput($object, 'site_town_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'prm', $langs->trans('PRM'), dol_escape_htmltag((string) $object->prm), procedurespvRenderDraftFieldInput($object, 'prm', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	print '</table>';
 	print '</div>';
 
 	print '<div class="fichehalfright">';
 	print '<table class="border centpercent tableforfield">';
-	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td>'.$object->getLibStatut(5).'</td></tr>';
-	print '<tr><td>'.$langs->trans('ExploitationType').'</td><td>'.dol_escape_htmltag((string) $object->type_exploitation).'</td></tr>';
-	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td>'.price((float) $object->puissance_installee_kwc).' kWc</td></tr>';
-	print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td>'.price((float) $object->puissance_injection_kva).' kVA</td></tr>';
-	print '<tr><td>'.$langs->trans('EnedisReference').'</td><td>'.dol_escape_htmltag((string) $object->ref_enedis).'</td></tr>';
-	print '<tr><td>'.$langs->trans('NextAction').'</td><td>'.$langs->trans($object->getNextAction()).'</td></tr>';
-	print '<tr><td>'.$langs->trans('LatestRelance').'</td><td>'.($relanceSummary['last_sent'] ? dol_print_date((int) $relanceSummary['last_sent'], 'dayhour') : '').'</td></tr>';
-	print '<tr><td>'.$langs->trans('NextRelance').'</td><td>'.($relanceSummary['next_due'] ? dol_print_date((int) $relanceSummary['next_due'], 'dayhour') : '').'</td></tr>';
-	print '<tr><td>'.$langs->trans('ActiveRelances').'</td><td>'.((int) $relanceSummary['active_count']).'</td></tr>';
+	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td colspan="2">'.$object->getLibStatut(5).'</td></tr>';
+	$exploitationLabelKey = isset($exploitationTypeOptions[(string) $object->type_exploitation]) ? $exploitationTypeOptions[(string) $object->type_exploitation] : '';
+	procedurespvPrintDraftEditableRow($object, 'type_exploitation', $langs->trans('ExploitationType'), ($exploitationLabelKey !== '' ? $langs->trans($exploitationLabelKey) : dol_escape_htmltag((string) $object->type_exploitation)), procedurespvRenderDraftFieldInput($object, 'type_exploitation', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'puissance_installee_kwc', $langs->trans('InstalledPowerKwc'), price((float) $object->puissance_installee_kwc).' kWc', procedurespvRenderDraftFieldInput($object, 'puissance_installee_kwc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'puissance_injection_kva', $langs->trans('InjectionPowerKva'), price((float) $object->puissance_injection_kva).' kVA', procedurespvRenderDraftFieldInput($object, 'puissance_injection_kva', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'ref_enedis', $langs->trans('EnedisReference'), dol_escape_htmltag((string) $object->ref_enedis), procedurespvRenderDraftFieldInput($object, 'ref_enedis', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	$responsibleValue = ((int) $object->fk_user_resp > 0 ? '<a href="'.DOL_URL_ROOT.'/user/card.php?id='.((int) $object->fk_user_resp).'">'.((int) $object->fk_user_resp).'</a>' : '');
+	procedurespvPrintDraftEditableRow($object, 'fk_user_resp', $langs->trans('Responsible'), $responsibleValue, procedurespvRenderDraftFieldInput($object, 'fk_user_resp', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	print '<tr><td>'.$langs->trans('NextAction').'</td><td colspan="2">'.$langs->trans($object->getNextAction()).'</td></tr>';
+	print '<tr><td>'.$langs->trans('LatestRelance').'</td><td colspan="2">'.($relanceSummary['last_sent'] ? dol_print_date((int) $relanceSummary['last_sent'], 'dayhour') : '').'</td></tr>';
+	print '<tr><td>'.$langs->trans('NextRelance').'</td><td colspan="2">'.($relanceSummary['next_due'] ? dol_print_date((int) $relanceSummary['next_due'], 'dayhour') : '').'</td></tr>';
+	print '<tr><td>'.$langs->trans('ActiveRelances').'</td><td colspan="2">'.((int) $relanceSummary['active_count']).'</td></tr>';
 	if ((int) $relanceSummary['overdue_count'] > 0) {
-		print '<tr><td>'.$langs->trans('OverdueRelances').'</td><td><span class="badge badge-status4">'.((int) $relanceSummary['overdue_count']).'</span></td></tr>';
+		print '<tr><td>'.$langs->trans('OverdueRelances').'</td><td colspan="2"><span class="badge badge-status4">'.((int) $relanceSummary['overdue_count']).'</span></td></tr>';
 	}
-	print '<tr><td>'.$langs->trans('BlockingReason').'</td><td>'.$langs->trans($object->getBlockingReason()).'</td></tr>';
+	print '<tr><td>'.$langs->trans('BlockingReason').'</td><td colspan="2">'.$langs->trans($object->getBlockingReason()).'</td></tr>';
 	print '</table>';
 	print '</div>';
 	print '</div>';
@@ -338,9 +670,6 @@ if ($action === 'create' || $action === 'edit') {
 
 	print '<div class="tabsAction">';
 	$token = newToken();
-	if ($permissiontoadd) {
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=edit">'.$langs->trans('Modify').'</a>';
-	}
 	if (procedurespvCanDo($user, 'raccordement', 'send_collecte')) {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=send_collecte&token='.$token.'">'.$langs->trans('SendCollecteClientAction').'</a>';
 	}

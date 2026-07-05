@@ -306,7 +306,7 @@ class Raccordement extends CommonObject
 	{
 		$this->id = 0;
 		$this->rowid = 0;
-		$this->ref = 'PVPROC-'.dol_print_date(dol_now(), '%Y').'-0001';
+		$this->ref = 'DDR'.dol_print_date(dol_now(), '%Y%m').'-0001';
 		$this->status = 0;
 		$this->type_exploitation = 'autoconsommation_surplus';
 		$this->puissance_installee_kwc = 6.0;
@@ -317,7 +317,7 @@ class Raccordement extends CommonObject
 	/**
 	 * Return next reference.
 	 *
-	 * @return string
+	 * @return string|int
 	 */
 	public function getNextNumRef()
 	{
@@ -337,7 +337,7 @@ class Raccordement extends CommonObject
 	/**
 	 * Alias kept for the planned API.
 	 *
-	 * @return string
+	 * @return string|int
 	 */
 	public function generateRef()
 	{
@@ -463,7 +463,17 @@ class Raccordement extends CommonObject
 	 */
 	public function canUseCentralePV()
 	{
-		return function_exists('isModEnabled') && (isModEnabled('centralepv') || isModEnabled('centrale_pv') || isModEnabled('centralespv'));
+		if (!function_exists('isModEnabled') || getDolGlobalInt('PROCEDURESPV_USE_CENTRALEPV_IF_AVAILABLE', 1) <= 0) {
+			return false;
+		}
+
+		foreach (array('powerplantpv', 'centralepv', 'centrale_pv', 'centralespv') as $moduleKey) {
+			if (isModEnabled($moduleKey)) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

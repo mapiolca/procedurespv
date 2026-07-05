@@ -33,11 +33,21 @@ $searchStatus = GETPOST('search_status', 'alphanohtml');
 $searchTypeExploitation = GETPOST('search_type_exploitation', 'alphanohtml');
 $searchResponsible = GETPOSTINT('search_responsible');
 $searchRefEnedis = GETPOST('search_ref_enedis', 'alphanohtml');
+$buttonRemoveFilter = GETPOST('button_removefilter', 'alpha');
 $view = GETPOST('view', 'alphanohtml');
 $sortfield = GETPOST('sortfield', 'aZ09comma');
 $sortorder = GETPOST('sortorder', 'aZ09comma');
 $page = GETPOSTINT('page');
 $limit = GETPOSTINT('limit');
+
+if ($buttonRemoveFilter !== '') {
+	$searchRef = '';
+	$searchClient = '';
+	$searchStatus = '';
+	$searchTypeExploitation = '';
+	$searchResponsible = 0;
+	$searchRefEnedis = '';
+}
 
 if ($sortfield === '') {
 	$sortfield = 't.datec';
@@ -201,7 +211,12 @@ print '<td></td>';
 print '<td></td>';
 print '<td></td>';
 print '<td class="center">';
-print '<input type="submit" class="button small" value="'.$langs->trans('Search').'">';
+print '<button type="submit" class="liste_titre button_search" name="button_search" value="x">';
+print img_picto($langs->trans('Search'), 'search');
+print '</button>';
+print '<button type="submit" class="liste_titre button_removefilter" name="button_removefilter" value="x">';
+print img_picto($langs->trans('RemoveFilter'), 'searchclear');
+print '</button>';
 print '</td>';
 print '</tr>';
 

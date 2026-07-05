@@ -50,7 +50,7 @@ class CentralePVAdapter
 	 */
 	private function getCandidateModuleKeys()
 	{
-		return array('centralepv', 'centrale_pv', 'centralespv');
+		return array('powerplantpv', 'centralepv', 'centrale_pv', 'centralespv');
 	}
 
 	/**
@@ -135,10 +135,9 @@ class CentralePVAdapter
 			return '';
 		}
 
-		foreach (array('label', 'nom', 'name', 'ref') as $field) {
-			if (isset($obj->{$field}) && (string) $obj->{$field} !== '') {
-				return (string) $obj->{$field};
-			}
+		$label = $this->getCentraleLabelFromRow($obj);
+		if ($label !== '') {
+			return $label;
 		}
 
 		return (string) $id;
@@ -158,6 +157,8 @@ class CentralePVAdapter
 
 		$moduleKey = $this->getMainMenuKey();
 		$candidatePaths = array(
+			'/'.$moduleKey.'/powerplant_card.php?id='.(int) $id,
+			'/'.$moduleKey.'/centralepv_card.php?id='.(int) $id,
 			'/'.$moduleKey.'/centrale/card.php?id='.(int) $id,
 			'/'.$moduleKey.'/card.php?id='.(int) $id,
 		);
@@ -170,6 +171,71 @@ class CentralePVAdapter
 		}
 
 		return '';
+	}
+
+	/**
+	 * Return selectable Centrale PV options.
+	 *
+	 * @param int $selectedId Selected centrale id
+	 * @param int $limit Maximum number of options
+	 * @return array<int,string>
+	 */
+	public function getCentraleOptions($selectedId = 0, $limit = 500)
+	{
+		$options = array();
+		if (!$this->isAvailable()) {
+			return $options;
+		}
+
+		foreach ($this->getCandidateTables() as $tableName) {
+			if (!$this->tableExists($tableName)) {
+				continue;
+			}
+
+			$sql = 'SELECT * FROM '.$tableName;
+			$where = $this->getEntityWhereClause($tableName);
+			if ($where !== '') {
+				$sql .= ' WHERE '.$where;
+			}
+			$sql .= ' ORDER BY rowid DESC';
+			if ($limit > 0) {
+				$sql .= ' LIMIT '.((int) $limit);
+			}
+
+			$resql = $this->db->query($sql);
+			if (!$resql) {
+				$this->error = $this->db->lasterror();
+				return $options;
+			}
+
+			while (is_object($obj = $this->db->fetch_object($resql))) {
+				if (!isset($obj->rowid)) {
+					continue;
+				}
+				$rowid = (int) $obj->rowid;
+				if ($rowid <= 0) {
+					continue;
+				}
+
+				$label = $this->getCentraleLabelFromRow($obj);
+				$options[$rowid] = $label !== '' ? $label : (string) $rowid;
+			}
+
+			if (!empty($options)) {
+				break;
+			}
+		}
+
+		$selectedId = (int) $selectedId;
+		if ($selectedId > 0 && empty($options[$selectedId])) {
+			$obj = $this->fetchCentrale($selectedId);
+			if (is_object($obj)) {
+				$label = $this->getCentraleLabelFromRow($obj);
+				$options[$selectedId] = $label !== '' ? $label : (string) $selectedId;
+			}
+		}
+
+		return $options;
 	}
 
 	/**
@@ -190,10 +256,10 @@ class CentralePVAdapter
 			'address' => $this->readFirstString($obj, array('address', 'site_address', 'adresse')),
 			'zip' => $this->readFirstString($obj, array('zip', 'site_zip', 'cp', 'code_postal')),
 			'town' => $this->readFirstString($obj, array('town', 'site_town', 'ville')),
-			'prm' => $this->readFirstString($obj, array('prm', 'pdl', 'prm_pdl')),
-			'puissance_installee_kwc' => $this->readFirstFloat($obj, array('puissance_installee_kwc', 'power_kwc', 'puissance')),
-			'puissance_injection_kva' => $this->readFirstFloat($obj, array('puissance_injection_kva', 'injection_kva', 'puissance_injection')),
-			'type_exploitation' => $this->readFirstString($obj, array('type_exploitation', 'exploitation_type')),
+			'prm' => $this->readFirstString($obj, array('prm', 'pdl', 'prm_pdl', 'prm_pdl_number')),
+			'puissance_installee_kwc' => $this->readFirstFloat($obj, array('puissance_installee_kwc', 'installed_power', 'power_kwc', 'puissance')),
+			'puissance_injection_kva' => $this->readFirstFloat($obj, array('puissance_injection_kva', 'connection_contract_power', 'injection_kva', 'puissance_injection')),
+			'type_exploitation' => $this->readFirstString($obj, array('type_exploitation', 'exploitation_type', 'connection_type')),
 			'type_pose' => $this->readFirstString($obj, array('type_pose', 'pose_type')),
 		);
 	}
@@ -206,11 +272,76 @@ class CentralePVAdapter
 	private function getCandidateTables()
 	{
 		return array(
+			MAIN_DB_PREFIX.'powerplantpv_powerplant',
 			MAIN_DB_PREFIX.'centralepv_centrale',
 			MAIN_DB_PREFIX.'centrale_pv_centrale',
 			MAIN_DB_PREFIX.'centralespv_centrale',
 			MAIN_DB_PREFIX.'centralepv',
 		);
+	}
+
+	/**
+	 * Return display label from a fetched Centrale PV row.
+	 *
+	 * @param stdClass $obj Source object
+	 * @return string
+	 */
+	private function getCentraleLabelFromRow($obj)
+	{
+		$parts = array();
+		foreach (array('ref', 'label', 'nom', 'name') as $field) {
+			if (isset($obj->{$field}) && trim((string) $obj->{$field}) !== '') {
+				$parts[] = trim((string) $obj->{$field});
+			}
+		}
+
+		return implode(' - ', array_unique($parts));
+	}
+
+	/**
+	 * Return SQL entity filter for a known optional Centrale PV table.
+	 *
+	 * @param string $tableName Full table name
+	 * @return string
+	 */
+	private function getEntityWhereClause($tableName)
+	{
+		global $conf;
+
+		if (!$this->tableHasColumn($tableName, 'entity')) {
+			return '';
+		}
+
+		if (function_exists('getEntity')) {
+			$entityList = (string) getEntity($this->getEntityElementForTable($tableName));
+			if ($entityList !== '') {
+				return 'entity IN ('.$entityList.')';
+			}
+		}
+
+		$entity = (is_object($conf) && !empty($conf->entity)) ? (int) $conf->entity : 1;
+		return 'entity = '.$entity;
+	}
+
+	/**
+	 * Return Multicompany element key for a candidate table.
+	 *
+	 * @param string $tableName Full table name
+	 * @return string
+	 */
+	private function getEntityElementForTable($tableName)
+	{
+		if (strpos($tableName, 'powerplantpv_powerplant') !== false) {
+			return 'powerplant';
+		}
+		if (strpos($tableName, 'centrale_pv') !== false) {
+			return 'centrale_pv';
+		}
+		if (strpos($tableName, 'centralespv') !== false) {
+			return 'centralespv';
+		}
+
+		return 'centralepv';
 	}
 
 	/**
@@ -222,6 +353,21 @@ class CentralePVAdapter
 	private function tableExists($tableName)
 	{
 		$sql = "SHOW TABLES LIKE '".$this->db->escape($tableName)."'";
+		$resql = $this->db->query($sql);
+
+		return $resql && $this->db->num_rows($resql) > 0;
+	}
+
+	/**
+	 * Check column existence.
+	 *
+	 * @param string $tableName Full table name
+	 * @param string $columnName Column name
+	 * @return bool
+	 */
+	private function tableHasColumn($tableName, $columnName)
+	{
+		$sql = 'SHOW COLUMNS FROM '.$this->db->sanitize($tableName)." LIKE '".$this->db->escape($columnName)."'";
 		$resql = $this->db->query($sql);
 
 		return $resql && $this->db->num_rows($resql) > 0;
@@ -263,4 +409,3 @@ class CentralePVAdapter
 		return null;
 	}
 }
-

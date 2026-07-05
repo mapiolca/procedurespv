@@ -12,6 +12,8 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/ajax.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php';
+require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
+require_once dol_buildpath('/procedurespv/core/modules/procedurespv/modules_raccordement.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 $langs->loadLangs(array('admin', 'procedurespv@procedurespv'));
@@ -139,6 +141,122 @@ function procedurespvGetActiveDocumentModels($db, $type)
 }
 
 /**
+ * Read a scalar public property from a dynamic Dolibarr model object.
+ *
+ * @param object $object Source object
+ * @param string $property Property name
+ * @param string $default Default value
+ * @return string
+ */
+function procedurespvGetObjectStringProperty($object, $property, $default = '')
+{
+	$properties = get_object_vars($object);
+	if (!array_key_exists($property, $properties)) {
+		return $default;
+	}
+
+	$value = $properties[$property];
+	if (!is_scalar($value)) {
+		return $default;
+	}
+
+	return (string) $value;
+}
+
+/**
+ * Render native-style numbering module administration for Raccordement.
+ *
+ * @param DoliDB $db Database handler
+ * @param Translate $langs Translation handler
+ * @param Form $form Form helper
+ * @return void
+ */
+function procedurespvPrintRaccordementNumberingBlock($db, $langs, $form)
+{
+	global $conf;
+
+	$models = array('mod_pvproc_standard', 'mod_pvproc_advanced');
+	$currentModel = getDolGlobalString('PROCEDURESPV_RACCORDEMENT_ADDON', 'mod_pvproc_standard');
+
+	print load_fiche_titre($langs->trans('NumberingModules', $langs->trans('Raccordement')), '', '');
+	print '<div class="div-table-responsive-no-min">';
+	print '<table class="noborder centpercent">';
+	print '<tr class="liste_titre">';
+	print '<td>'.$langs->trans('Name').'</td>';
+	print '<td>'.$langs->trans('Description').'</td>';
+	print '<td class="nowrap">'.$langs->trans('Example').'</td>';
+	print '<td class="center width75">'.$langs->trans('Status').'</td>';
+	print '<td class="center width75">'.$langs->trans('ShortInfo').'</td>';
+	print '</tr>';
+
+	foreach ($models as $className) {
+		if (!class_exists($className)) {
+			continue;
+		}
+
+		/** @var ModeleNumRefRaccordement $module */
+		$module = new $className($db);
+		$version = procedurespvGetObjectStringProperty($module, 'version', 'dolibarr');
+		if ($version === 'development' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 2) {
+			continue;
+		}
+		if ($version === 'experimental' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 1) {
+			continue;
+		}
+
+		print '<tr class="oddeven">';
+		print '<td>'.dol_escape_htmltag($module->getName($langs)).'</td>';
+		print '<td>'.$module->info($langs).'</td>';
+
+		print '<td class="nowrap">';
+		$example = $module->getExample();
+		if (preg_match('/^Error/', (string) $example)) {
+			$langs->load('errors');
+			print '<div class="error">'.$langs->trans((string) $example).'</div>';
+		} elseif ((string) $example === 'NotConfigured') {
+			print '<span class="opacitymedium">'.$langs->trans('NotConfigured').'</span>';
+		} else {
+			print dol_escape_htmltag((string) $example);
+		}
+		print '</td>';
+
+		print '<td class="center">';
+		if ($currentModel === $className) {
+			print img_picto($langs->trans('Activated'), 'switch_on');
+		} elseif ($module->canBeActivated()) {
+			print '<a href="'.dol_buildpath('/procedurespv/admin/setup.php', 1).'?action=setmod&token='.newToken().'&value='.urlencode($className).'">';
+			print img_picto($langs->trans('Disabled'), 'switch_off');
+			print '</a>';
+		} else {
+			print img_picto($langs->trans('Disabled'), 'switch_off');
+		}
+		print '</td>';
+
+		$tmpobject = new Raccordement($db);
+		$tmpobject->initAsSpecimen();
+		$tmpobject->entity = (int) $conf->entity;
+		$nextValue = $module->getNextValue(null, $tmpobject);
+		$htmltooltip = $langs->trans('Version').': <b>'.dol_escape_htmltag($module->getVersion()).'</b><br>';
+		if ((string) $nextValue !== $langs->trans('NotAvailable')) {
+			$htmltooltip .= $langs->trans('NextValue').': ';
+			if ($nextValue) {
+				if (preg_match('/^Error/', (string) $nextValue) || (string) $nextValue === 'NotConfigured') {
+					$nextValue = $langs->trans((string) $nextValue);
+				}
+				$htmltooltip .= dol_escape_htmltag((string) $nextValue).'<br>';
+			} elseif (!empty($module->error)) {
+				$htmltooltip .= $langs->trans((string) $module->error).'<br>';
+			}
+		}
+		print '<td class="center">'.$form->textwithpicto('', $htmltooltip, 1, 'info').'</td>';
+		print '</tr>';
+	}
+
+	print '</table>';
+	print '</div>';
+}
+
+/**
  * Render native document model administration for the ENEDIS mandate PDF.
  *
  * @param DoliDB $db Database handler
@@ -193,12 +311,12 @@ function procedurespvPrintMandatPdfModelBlock($db, $langs, $form, $type, $curren
 		}
 
 		$module = new $classname($db);
-		$modelDocumentType = !empty($module->document_model_type) ? (string) $module->document_model_type : $type;
+		$modelDocumentType = procedurespvGetObjectStringProperty($module, 'document_model_type', $type);
 		if ($modelDocumentType !== $type) {
 			continue;
 		}
 
-		$moduleVersion = !empty($module->version) ? (string) $module->version : 'dolibarr';
+		$moduleVersion = procedurespvGetObjectStringProperty($module, 'version', 'dolibarr');
 		if ($moduleVersion === 'development' && getDolGlobalInt('MAIN_FEATURES_LEVEL') < 2) {
 			continue;
 		}
@@ -207,16 +325,19 @@ function procedurespvPrintMandatPdfModelBlock($db, $langs, $form, $type, $curren
 		}
 
 		$numShown++;
-		$moduleName = !empty($module->name) ? (string) $module->name : $name;
+		$moduleName = procedurespvGetObjectStringProperty($module, 'name', $name);
 		$moduleLabel = $langs->trans($moduleName) !== $moduleName ? $langs->trans($moduleName) : $moduleName;
 		$moduleDescription = '';
 		if (method_exists($module, 'info')) {
 			$moduleDescription = (string) $module->info($langs);
-		} elseif (!empty($module->description)) {
-			$moduleDescription = $langs->trans((string) $module->description);
+		} else {
+			$descriptionKey = procedurespvGetObjectStringProperty($module, 'description', '');
+			if ($descriptionKey !== '') {
+				$moduleDescription = $langs->trans($descriptionKey);
+			}
 		}
-		$modelScandir = !empty($module->scandir) ? (string) $module->scandir : $modelPathLabel;
-		$modelType = !empty($module->type) ? (string) $module->type : 'pdf';
+		$modelScandir = procedurespvGetObjectStringProperty($module, 'scandir', $modelPathLabel);
+		$modelType = procedurespvGetObjectStringProperty($module, 'type', 'pdf');
 
 		print '<tr class="oddeven">';
 		print '<td>'.dol_escape_htmltag($moduleLabel).'</td>';
@@ -248,13 +369,15 @@ function procedurespvPrintMandatPdfModelBlock($db, $langs, $form, $type, $curren
 
 		$htmltooltip = $langs->trans('Name').': '.dol_escape_htmltag($moduleLabel);
 		$htmltooltip .= '<br>'.$langs->trans('Type').': '.dol_escape_htmltag($modelType);
-		if ($modelType === 'pdf' && !empty($module->page_largeur) && !empty($module->page_hauteur)) {
-			$htmltooltip .= '<br>'.$langs->trans('Width').'/'.$langs->trans('Height').': '.((int) $module->page_largeur).'/'.((int) $module->page_hauteur);
+		$pageWidth = (int) procedurespvGetObjectStringProperty($module, 'page_largeur', '0');
+		$pageHeight = (int) procedurespvGetObjectStringProperty($module, 'page_hauteur', '0');
+		if ($modelType === 'pdf' && $pageWidth > 0 && $pageHeight > 0) {
+			$htmltooltip .= '<br>'.$langs->trans('Width').'/'.$langs->trans('Height').': '.$pageWidth.'/'.$pageHeight;
 		}
 		$htmltooltip .= '<br>'.$langs->trans('Path').': '.dol_escape_htmltag($modelPathLabel.'/'.$file);
 		$htmltooltip .= '<br><br><u>'.$langs->trans('FeaturesSupported').':</u>';
-		$htmltooltip .= '<br>'.$langs->trans('Logo').': '.yn(!empty($module->option_logo), 1, 1);
-		$htmltooltip .= '<br>'.$langs->trans('MultiLanguage').': '.yn(!empty($module->option_multilang), 1, 1);
+		$htmltooltip .= '<br>'.$langs->trans('Logo').': '.yn((int) procedurespvGetObjectStringProperty($module, 'option_logo', '0'), 1, 1);
+		$htmltooltip .= '<br>'.$langs->trans('MultiLanguage').': '.yn((int) procedurespvGetObjectStringProperty($module, 'option_multilang', '0'), 1, 1);
 
 		print '<td class="center">'.$form->textwithpicto('', $htmltooltip, 1, 'info').'</td>';
 		print '<td class="center">'.img_object($langs->transnoentitiesnoconv('PreviewNotAvailable'), 'generic').'</td>';
@@ -268,7 +391,46 @@ function procedurespvPrintMandatPdfModelBlock($db, $langs, $form, $type, $curren
 	print '</table>';
 }
 
-if (in_array($action, array('set', 'del', 'setdoc', 'unsetdoc'), true)) {
+if ($action === 'updateMask') {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
+		accessforbidden($langs->trans('ErrorBadToken'));
+	}
+
+	$maskconst = GETPOST('maskconst', 'alphanohtml');
+	$maskvalue = GETPOST('maskvalue', 'nohtml');
+	if ($maskconst !== 'PROCEDURESPV_RACCORDEMENT_ADVANCED_MASK') {
+		accessforbidden('Bad numbering mask parameters');
+	}
+
+	$result = dolibarr_set_const($db, $maskconst, $maskvalue, 'chaine', 0, '', (int) $conf->entity);
+	if ($result > 0) {
+		setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
+	} else {
+		setEventMessages($langs->trans('ErrorSetupNotSaved'), null, 'errors');
+	}
+} elseif ($action === 'setmod') {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
+		accessforbidden($langs->trans('ErrorBadToken'));
+	}
+
+	if (!in_array($value, array('mod_pvproc_standard', 'mod_pvproc_advanced'), true) || !class_exists($value)) {
+		accessforbidden('Bad numbering model parameters');
+	}
+
+	/** @var ModeleNumRefRaccordement $numberingModel */
+	$numberingModel = new $value($db);
+	if (!$numberingModel->canBeActivated()) {
+		setEventMessages($langs->trans('ErrorSetupNotSaved'), array($langs->trans('NotConfigured')), 'errors');
+	} else {
+		$result = dolibarr_set_const($db, 'PROCEDURESPV_RACCORDEMENT_ADDON', $value, 'chaine', 0, '', (int) $conf->entity);
+		if ($result > 0) {
+			$conf->global->PROCEDURESPV_RACCORDEMENT_ADDON = $value;
+			setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
+		} else {
+			setEventMessages($langs->trans('ErrorSetupNotSaved'), null, 'errors');
+		}
+	}
+} elseif (in_array($action, array('set', 'del', 'setdoc', 'unsetdoc'), true)) {
 	if (!GETPOST('token', 'alpha')) {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
@@ -447,6 +609,9 @@ print '<input type="submit" class="button button-save" value="'.$langs->trans('S
 print '</div>';
 
 print '</form>';
+
+print '<br>';
+procedurespvPrintRaccordementNumberingBlock($db, $langs, $form);
 
 print '<br>';
 procedurespvPrintMandatPdfModelBlock($db, $langs, $form, $pdfDocumentTypeMandatEnedis, $pdfModelMandat);
