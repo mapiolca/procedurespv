@@ -1,0 +1,4 @@
+module=procedurespv
+object=raccordement
+generated_from=modulebuilder-compatible
+

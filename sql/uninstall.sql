@@ -1,0 +1,9 @@
+-- Data is intentionally preserved when the module is disabled.
+-- A future explicit purge action may remove Procedures PV data after administrator confirmation.
+-- Tables currently preserved:
+-- llx_pvproc_raccordement
+-- llx_pvproc_publiclink
+-- llx_pvproc_signature
+-- llx_pvproc_piece
+-- llx_pvproc_convention
+-- llx_pvproc_relance
