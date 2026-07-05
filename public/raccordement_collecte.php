@@ -20,6 +20,8 @@ require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
+require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/company.lib.php';
 
 $langs->loadLangs(array('procedurespv@procedurespv'));
 
@@ -71,6 +73,206 @@ function procedurespvLoadMandatEnedisPdfModel($db)
 	return new $className($db);
 }
 
+/**
+ * Return a company setup value for the requested entity with a controlled fallback.
+ *
+ * @param string $name Constant name
+ * @param string $fallback Fallback value
+ * @param int    $entity Entity id
+ * @return string
+ */
+function procedurespvPublicGetCompanyConst($name, $fallback, $entity)
+{
+	global $db, $conf;
+
+	$value = dolibarr_get_const($db, $name, $entity);
+	if ($value === '' && (int) $entity === (int) $conf->entity) {
+		$value = getDolGlobalString($name, '');
+	}
+	if ($value === '') {
+		$value = $fallback;
+	}
+
+	return trim((string) $value);
+}
+
+/**
+ * Return the public logo URL for a company entity.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvPublicGetCompanyLogoUrl($entity)
+{
+	global $conf, $mysoc;
+
+	$entity = $entity > 0 ? $entity : (int) $conf->entity;
+	$isCurrentEntity = (int) $entity === (int) $conf->entity;
+	$logoDir = '';
+
+	if (isset($conf->mycompany->multidir_output[$entity]) && $conf->mycompany->multidir_output[$entity] !== '') {
+		$logoDir = (string) $conf->mycompany->multidir_output[$entity];
+	} elseif (isset($conf->mycompany->dir_output) && $conf->mycompany->dir_output !== '') {
+		$logoDir = (string) $conf->mycompany->dir_output;
+	}
+
+	if ($logoDir === '') {
+		return '';
+	}
+
+	$smallFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->logo_small)) ? (string) $mysoc->logo_small : '';
+	$logoFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->logo)) ? (string) $mysoc->logo : '';
+	$logoSmall = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_LOGO_SMALL', $smallFallback, $entity);
+	$logo = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_LOGO', $logoFallback, $entity);
+
+	$candidates = array();
+	if ($logoSmall !== '') {
+		$candidates[] = 'logos/thumbs/'.$logoSmall;
+	}
+	if ($logo !== '') {
+		$candidates[] = 'logos/'.$logo;
+	}
+
+	foreach ($candidates as $candidate) {
+		if (is_readable($logoDir.'/'.$candidate)) {
+			return DOL_URL_ROOT.'/viewimage.php?modulepart=mycompany&entity='.$entity.'&file='.urlencode($candidate);
+		}
+	}
+
+	return '';
+}
+
+/**
+ * Build legal company data displayed on the public page.
+ *
+ * @param int $entity Entity id
+ * @return array{name:string, lines:array<int,array{label:string,value:string}>}
+ */
+function procedurespvPublicGetCompanyLegalData($entity)
+{
+	global $conf, $mysoc;
+
+	$entity = $entity > 0 ? $entity : (int) $conf->entity;
+	$isCurrentEntity = (int) $entity === (int) $conf->entity;
+	$nameFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->name)) ? (string) $mysoc->name : '';
+	$addressFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->address)) ? (string) $mysoc->address : '';
+	$zipFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->zip)) ? (string) $mysoc->zip : '';
+	$townFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->town)) ? (string) $mysoc->town : '';
+	$emailFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->email)) ? (string) $mysoc->email : '';
+	$urlFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->url)) ? (string) $mysoc->url : '';
+	$sirenFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->idprof1)) ? (string) $mysoc->idprof1 : '';
+	$siretFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->idprof2)) ? (string) $mysoc->idprof2 : '';
+	$nafFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->idprof3)) ? (string) $mysoc->idprof3 : '';
+	$rcsFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->idprof4)) ? (string) $mysoc->idprof4 : '';
+	$vatFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->tva_intra)) ? (string) $mysoc->tva_intra : '';
+	$juridicalStatusFallback = ($isCurrentEntity && is_object($mysoc) && !empty($mysoc->forme_juridique_code)) ? (string) $mysoc->forme_juridique_code : '';
+
+	$name = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_NOM', $nameFallback, $entity);
+	if ($name === '') {
+		$name = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_NAME', $nameFallback, $entity);
+	}
+
+	$address = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_ADDRESS', $addressFallback, $entity);
+	$zip = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_ZIP', $zipFallback, $entity);
+	$town = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_TOWN', $townFallback, $entity);
+	$email = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_MAIL', $emailFallback, $entity);
+	if ($email === '') {
+		$email = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_EMAIL', $emailFallback, $entity);
+	}
+	$url = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_WEB', $urlFallback, $entity);
+	$siren = procedurespvPublicGetCompanyConst('MAIN_INFO_SIREN', $sirenFallback, $entity);
+	$siret = procedurespvPublicGetCompanyConst('MAIN_INFO_SIRET', $siretFallback, $entity);
+	$naf = procedurespvPublicGetCompanyConst('MAIN_INFO_APE', $nafFallback, $entity);
+	if ($naf === '') {
+		$naf = procedurespvPublicGetCompanyConst('MAIN_INFO_NAF', $nafFallback, $entity);
+	}
+	$rcs = procedurespvPublicGetCompanyConst('MAIN_INFO_RCS', $rcsFallback, $entity);
+	$vat = procedurespvPublicGetCompanyConst('MAIN_INFO_TVAINTRA', $vatFallback, $entity);
+	$capital = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_CAPITAL', procedurespvPublicGetCompanyConst('MAIN_INFO_CAPITAL', '', $entity), $entity);
+	$juridicalStatusCode = procedurespvPublicGetCompanyConst('MAIN_INFO_SOCIETE_FORME_JURIDIQUE', $juridicalStatusFallback, $entity);
+	$juridicalStatus = $juridicalStatusCode !== '' ? getFormeJuridiqueLabel($juridicalStatusCode) : '';
+
+	$lines = array();
+	$addressLine = trim($address.' '.trim($zip.' '.$town));
+	if ($addressLine !== '') {
+		$lines[] = array('label' => '', 'value' => $addressLine);
+	}
+	foreach (array(
+		'PublicLegalJuridicalStatus' => $juridicalStatus,
+		'PublicLegalSiren' => $siren,
+		'PublicLegalSiret' => $siret,
+		'PublicLegalApe' => $naf,
+		'PublicLegalRcs' => $rcs,
+		'PublicLegalVat' => $vat,
+		'PublicLegalCapital' => $capital,
+		'PublicLegalEmail' => $email,
+		'PublicLegalWebsite' => $url,
+	) as $label => $value) {
+		if ($value !== '') {
+			$lines[] = array('label' => $label, 'value' => $value);
+		}
+	}
+
+	return array('name' => $name, 'lines' => $lines);
+}
+
+/**
+ * Print the company brand header for the public page.
+ *
+ * @param Translate $langs Language handler
+ * @param string    $logoUrl Logo URL
+ * @param string    $companyName Company name
+ * @return void
+ */
+function procedurespvPublicPrintBrand($langs, $logoUrl, $companyName)
+{
+	if ($logoUrl === '' && $companyName === '') {
+		return;
+	}
+
+	print '<div class="public-brandbar">';
+	if ($logoUrl !== '') {
+		$alt = $companyName !== '' ? $companyName : $langs->trans('PublicCompanyLogo');
+		print '<img class="public-entity-logo" src="'.dol_escape_htmltag($logoUrl).'" alt="'.dol_escape_htmltag($alt).'">';
+	} else {
+		print '<span class="public-brand-name">'.dol_escape_htmltag($companyName).'</span>';
+	}
+	print '</div>';
+}
+
+/**
+ * Print public legal footer.
+ *
+ * @param Translate $langs Language handler
+ * @param array{name:string, lines:array<int,array{label:string,value:string}>} $legalData Legal company data
+ * @return void
+ */
+function procedurespvPublicPrintLegalFooter($langs, array $legalData)
+{
+	if ($legalData['name'] === '' && empty($legalData['lines'])) {
+		return;
+	}
+
+	print '<footer class="public-legal-footer">';
+	print '<div class="public-legal-title">'.$langs->trans('PublicLegalMentions').'</div>';
+	if ($legalData['name'] !== '') {
+		print '<div class="public-legal-company">'.dol_escape_htmltag($legalData['name']).'</div>';
+	}
+	if (!empty($legalData['lines'])) {
+		print '<div class="public-legal-lines">';
+		foreach ($legalData['lines'] as $line) {
+			print '<span>';
+			if ($line['label'] !== '') {
+				print '<span class="public-legal-label">'.$langs->trans($line['label']).' : </span>';
+			}
+			print dol_escape_htmltag($line['value']);
+			print '</span>';
+		}
+		print '</div>';
+	}
+	print '</footer>';
+}
+
 $publicToken = GETPOST('public_token', 'alphanohtml');
 $action = GETPOST('action', 'aZ09');
 $submissionDone = false;
@@ -81,14 +283,45 @@ if (!isModEnabled('procedurespv')) {
 
 $publicLink = new PublicLink($db);
 $linkLoaded = $publicToken !== '' ? $publicLink->fetchByToken($publicToken, PublicLink::TYPE_COLLECTE_RACCORDEMENT) : 0;
-$linkUsable = $linkLoaded > 0 && $publicLink->isUsable();
-
 $object = new Raccordement($db);
-if ($linkUsable) {
+$linkObjectLoaded = false;
+if ($linkLoaded > 0) {
 	$result = $object->fetch((int) $publicLink->fk_raccordement, null, 0);
 	if ($result <= 0 || (int) $object->entity !== (int) $publicLink->entity) {
-		$linkUsable = false;
+		$linkLoaded = 0;
+	} else {
+		$linkObjectLoaded = true;
 	}
+}
+$linkExpired = $linkLoaded > 0 && !empty($publicLink->date_expiration) && (int) $publicLink->date_expiration < dol_now();
+$linkUsable = $linkObjectLoaded && !$linkExpired && $publicLink->isUsable();
+$submittedLinkAvailable = $linkObjectLoaded && !$linkExpired && (int) $publicLink->status === PublicLink::STATUS_SUBMITTED;
+$submissionDone = $submittedLinkAvailable;
+
+if ($action === 'download_mandat') {
+	if (!$submittedLinkAvailable) {
+		accessforbidden($langs->trans('PublicLinkUnavailable'));
+	}
+
+	$signature = new Signature($db);
+	$result = $signature->fetchLatestForRaccordementEntity((int) $object->id, (int) $object->entity, Signature::TYPE_MANDAT_ENEDIS);
+	$signatureFile = $result > 0 ? $signature->filepath.'/'.$signature->filename : '';
+	$expectedDir = procedurespvGetRaccordementUploadDir($object);
+	$realSignatureFile = $signatureFile !== '' ? realpath($signatureFile) : false;
+	$realExpectedDir = $expectedDir !== '' ? realpath($expectedDir) : false;
+	if ($realSignatureFile === false || $realExpectedDir === false || strpos($realSignatureFile, rtrim($realExpectedDir, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR) !== 0) {
+		accessforbidden($langs->trans('ErrorFileNotFound'));
+	}
+
+	top_httphead('application/pdf');
+	header('Content-Disposition: attachment; filename="'.basename($realSignatureFile).'"');
+	$fileSize = filesize($realSignatureFile);
+	if (is_int($fileSize)) {
+		header('Content-Length: '.$fileSize);
+	}
+	readfile($realSignatureFile);
+	$db->close();
+	exit;
 }
 
 $isSubmitCollecte = $action === 'submit_collecte';
@@ -258,6 +491,11 @@ if ($linkUsable && $action === 'submit_collecte') {
 			$uploadErrors[] = $langs->trans('ErrorPdfNotGenerated');
 		} else {
 			$pdfFilename = $pdfModel->write_file($object, $langs, $uploadDir, array(
+				'client_type' => $clientType,
+				'client_name' => $clientName,
+				'client_siret' => $clientSiret,
+				'client_email' => $clientEmail,
+				'client_phone' => $clientPhone,
 				'signataire_nom' => $signataireNom,
 				'signataire_fonction' => $signataireFonction,
 				'signataire_email' => $signataireEmail,
@@ -298,6 +536,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 			$publicLink->markSubmitted();
 			$linkUsable = false;
 			$submissionDone = true;
+			$submittedLinkAvailable = true;
 			setEventMessages($langs->trans('PublicCollecteSubmitted'), null, 'mesgs');
 		} else {
 			setEventMessages($object->error, $object->errors, 'errors');
@@ -307,11 +546,22 @@ if ($linkUsable && $action === 'submit_collecte') {
 	}
 }
 
+$companyEntity = (int) $conf->entity;
+if (!empty($object->entity)) {
+	$companyEntity = (int) $object->entity;
+} elseif (!empty($publicLink->entity)) {
+	$companyEntity = (int) $publicLink->entity;
+}
+$companyLogoUrl = procedurespvPublicGetCompanyLogoUrl($companyEntity);
+$companyLegalData = procedurespvPublicGetCompanyLegalData($companyEntity);
+
 llxHeader('', $langs->trans('PublicCollecteTitle'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-public-collecte');
 
 print <<<'HTML'
 <style>
 .public-procedurespv {
+	display: flex;
+	justify-content: center;
 	min-height: calc(100vh - 70px);
 	padding: clamp(18px, 4vw, 46px);
 	background: linear-gradient(180deg, #f7fbfb 0%, #eef6f2 100%);
@@ -321,8 +571,26 @@ print <<<'HTML'
 	box-sizing: border-box;
 }
 .public-shell {
+	flex: 0 1 1120px;
 	width: min(1120px, 100%);
 	margin: 0 auto;
+}
+.public-brandbar {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	margin-bottom: 20px;
+}
+.public-entity-logo {
+	display: block;
+	max-width: min(260px, 80vw);
+	max-height: 78px;
+	object-fit: contain;
+}
+.public-brand-name {
+	font-size: 1.05rem;
+	font-weight: 800;
+	color: #172033;
 }
 .public-hero {
 	display: grid;
@@ -368,6 +636,11 @@ print <<<'HTML'
 	list-style: none;
 }
 .public-steps li {
+	margin: 0;
+	padding: 0;
+}
+.public-steps a {
+	display: block;
 	border: 1px solid #d7e3df;
 	border-radius: 999px;
 	background: #fff;
@@ -375,8 +648,17 @@ print <<<'HTML'
 	font-size: 0.88rem;
 	font-weight: 700;
 	color: #344054;
+	text-decoration: none !important;
+}
+.public-steps a:hover,
+.public-steps a:focus {
+	border-color: #0f766e;
+	color: #0f766e;
+	box-shadow: 0 8px 18px rgba(16, 24, 40, 0.08);
+	outline: none;
 }
 .public-section {
+	scroll-margin-top: 18px;
 	margin: 16px 0;
 	padding: clamp(16px, 2.2vw, 24px);
 	border: 1px solid #dce7e3;
@@ -483,6 +765,37 @@ print <<<'HTML'
 	padding: 10px 18px;
 	font-weight: 800;
 }
+.public-legal-footer {
+	margin-top: 26px;
+	padding-top: 18px;
+	border-top: 1px solid #d7e3df;
+	color: #526071;
+	font-size: 0.82rem;
+	line-height: 1.5;
+	text-align: center;
+}
+.public-legal-title {
+	margin-bottom: 4px;
+	font-size: 0.74rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0;
+	color: #0f766e;
+}
+.public-legal-company {
+	font-weight: 700;
+	color: #344054;
+}
+.public-legal-lines {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 4px 12px;
+	margin-top: 5px;
+}
+.public-legal-label {
+	font-weight: 700;
+}
 @media (max-width: 760px) {
 	.public-procedurespv {
 		padding: 16px;
@@ -523,12 +836,22 @@ print <<<'HTML'
 	.public-actions .button-save {
 		width: 100%;
 	}
+	.public-legal-footer {
+		text-align: left;
+	}
+	.public-legal-lines {
+		display: block;
+	}
+	.public-legal-lines span {
+		display: block;
+	}
 }
 </style>
 HTML;
 
 print '<main class="public-procedurespv">';
 print '<div class="public-shell">';
+procedurespvPublicPrintBrand($langs, $companyLogoUrl, $companyLegalData['name']);
 print '<header class="public-hero">';
 print '<div>';
 print '<div class="public-eyebrow">'.$langs->trans('PublicCollecteEyebrow').'</div>';
@@ -540,6 +863,11 @@ print '</header>';
 
 if ($submissionDone) {
 	print '<div class="ok">'.$langs->trans('PublicCollecteSubmitted').'</div>';
+	if ($submittedLinkAvailable) {
+		$downloadUrl = $_SERVER['PHP_SELF'].'?public_token='.urlencode($publicToken).'&action=download_mandat';
+		print '<p class="center"><a class="button" href="'.dol_escape_htmltag($downloadUrl).'">'.$langs->trans('DownloadSignedMandatEnedis').'</a></p>';
+	}
+	procedurespvPublicPrintLegalFooter($langs, $companyLegalData);
 	print '</div>';
 	print '</main>';
 	llxFooter('', 'public');
@@ -549,6 +877,7 @@ if ($submissionDone) {
 
 if (!$linkUsable) {
 	print '<div class="warning">'.$langs->trans('PublicLinkUnavailable').'</div>';
+	procedurespvPublicPrintLegalFooter($langs, $companyLegalData);
 	print '</div>';
 	print '</main>';
 	llxFooter('', 'public');
@@ -557,11 +886,11 @@ if (!$linkUsable) {
 }
 
 print '<ul class="public-steps">';
-print '<li>01 '.$langs->trans('PublicSectionClient').'</li>';
-print '<li>02 '.$langs->trans('PublicSectionSite').'</li>';
-print '<li>03 '.$langs->trans('PublicSectionProject').'</li>';
-print '<li>04 '.$langs->trans('PublicSectionPieces').'</li>';
-print '<li>05 '.$langs->trans('PublicSectionMandat').'</li>';
+print '<li><a href="#public-section-client">01 '.$langs->trans('PublicSectionClient').'</a></li>';
+print '<li><a href="#public-section-site">02 '.$langs->trans('PublicSectionSite').'</a></li>';
+print '<li><a href="#public-section-project">03 '.$langs->trans('PublicSectionProject').'</a></li>';
+print '<li><a href="#public-section-pieces">04 '.$langs->trans('PublicSectionPieces').'</a></li>';
+print '<li><a href="#public-section-mandat">05 '.$langs->trans('PublicSectionMandat').'</a></li>';
 print '</ul>';
 
 print '<form class="public-collecte-form" method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
@@ -569,7 +898,7 @@ print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="public_token" value="'.dol_escape_htmltag($publicToken).'">';
 print '<input type="hidden" name="action" value="submit_collecte">';
 
-print '<section class="public-section">';
+print '<section class="public-section" id="public-section-client">';
 print '<div class="public-section-header"><span class="public-step">1</span><h2>'.$langs->trans('PublicSectionClient').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('ClientType').'</td><td><select class="flat minwidth200" name="client_type" id="client_type">';
@@ -584,7 +913,7 @@ print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat
 print '</table>';
 print '</section>';
 
-print '<section class="public-section">';
+print '<section class="public-section" id="public-section-site">';
 print '<div class="public-section-header"><span class="public-step">2</span><h2>'.$langs->trans('PublicSectionSite').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" value="'.dol_escape_htmltag($formSiteName).'"></td></tr>';
@@ -600,7 +929,7 @@ print '</select>'.ajax_combobox('type_reseau').'</td></tr>';
 print '</table>';
 print '</section>';
 
-print '<section class="public-section">';
+print '<section class="public-section" id="public-section-project">';
 print '<div class="public-section-header"><span class="public-step">3</span><h2>'.$langs->trans('PublicSectionProject').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('ExploitationType').'</td><td><select class="flat minwidth300" name="type_exploitation" id="type_exploitation">';
@@ -613,14 +942,14 @@ print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><span class="publi
 print '</table>';
 print '</section>';
 
-print '<section class="public-section">';
+print '<section class="public-section" id="public-section-pieces">';
 print '<div class="public-section-header"><span class="public-step">4</span><h2>'.$langs->trans('PublicSectionPieces').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('PieceFactureElectricite').'</td><td><input type="file" class="flat" name="piece_facture_electricite"><span class="public-help">'.$langs->trans('PublicElectricityBillHelp').'</span></td></tr>';
 print '</table>';
 print '</section>';
 
-print '<section class="public-section">';
+print '<section class="public-section" id="public-section-mandat">';
 print '<div class="public-section-header"><span class="public-step">5</span><h2>'.$langs->trans('PublicSectionMandat').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" autocomplete="name" value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
@@ -716,6 +1045,7 @@ print '<script>
 
 print '<div class="public-actions"><input type="submit" class="button button-save" value="'.$langs->trans('SubmitCollecte').'"></div>';
 print '</form>';
+procedurespvPublicPrintLegalFooter($langs, $companyLegalData);
 print '</div>';
 print '</main>';
 

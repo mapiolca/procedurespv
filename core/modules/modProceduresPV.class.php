@@ -243,6 +243,8 @@ class modProceduresPV extends DolibarrModules
 		global $conf;
 
 		require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
+		require_once DOL_DOCUMENT_ROOT.'/core/class/translate.class.php';
+		require_once dol_buildpath('/procedurespv/class/actions_procedurespv.class.php', 0);
 
 		$sql = array();
 		$result = $this->_load_tables('/procedurespv/sql/');
@@ -252,6 +254,12 @@ class modProceduresPV extends DolibarrModules
 
 		$legacyMandatPdfModel = getDolGlobalString('PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS', '');
 		$mandatPdfModel = $legacyMandatPdfModel !== '' ? $legacyMandatPdfModel : 'mandatenedis';
+
+		$missingEmailTemplateConsts = array();
+		foreach (ActionsProceduresPV::getDefaultEmailTemplatesDefinition() as $templateconf) {
+			$constName = (string) $templateconf['const'];
+			$missingEmailTemplateConsts[$constName] = getDolGlobalString($constName, '__PROCEDURESPV_UNSET__') === '__PROCEDURESPV_UNSET__';
+		}
 
 		$defaults = array(
 			'PROCEDURESPV_USE_CENTRALEPV_IF_AVAILABLE' => '1',
@@ -272,6 +280,7 @@ class modProceduresPV extends DolibarrModules
 			'PROCEDURESPV_RACCORDEMENT_ADVANCED_MASK' => 'DDR{yyyy}{mm}-{0000}',
 			'PROCEDURESPV_MANDATENEDIS_ADDON_PDF' => $mandatPdfModel,
 			'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS' => 'mandatenedis',
+			'PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE' => '',
 		);
 
 		foreach ($defaults as $name => $value) {
@@ -294,7 +303,122 @@ class modProceduresPV extends DolibarrModules
 			}
 		}
 
+		$resultEmailTemplates = $this->registerDefaultEmailTemplates($missingEmailTemplateConsts);
+		if ($resultEmailTemplates < 0) {
+			return $resultEmailTemplates;
+		}
+
 		return $this->_init($sql, $options);
+	}
+
+	/**
+	 * Register default native email templates without overwriting edited templates.
+	 *
+	 * @param array<string,bool> $missingEmailTemplateConsts Constants missing before init defaults were created
+	 * @return int
+	 */
+	private function registerDefaultEmailTemplates($missingEmailTemplateConsts)
+	{
+		global $conf;
+
+		$templates = ActionsProceduresPV::getDefaultEmailTemplatesDefinition();
+		$langcodes = array('fr_FR', 'en_US');
+		$entity = !empty($conf->entity) ? (int) $conf->entity : 1;
+		$defaultLang = getDolGlobalString('MAIN_LANG_DEFAULT', 'fr_FR');
+		if (!in_array($defaultLang, $langcodes, true)) {
+			$defaultLang = 'fr_FR';
+		}
+
+		foreach ($langcodes as $langcode) {
+			$outputlangs = new Translate('', $conf);
+			$outputlangs->setDefaultLang($langcode);
+			$outputlangs->loadLangs(array('procedurespv@procedurespv'));
+
+			foreach ($templates as $templateconf) {
+				$typeTemplate = $this->db->escape((string) $templateconf['type_template']);
+				$label = $this->db->escape($outputlangs->transnoentitiesnoconv((string) $templateconf['label']));
+				$topic = $this->db->escape($outputlangs->transnoentitiesnoconv((string) $templateconf['topic']));
+				$content = $this->db->escape($outputlangs->transnoentitiesnoconv((string) $templateconf['content']));
+				$position = (int) $templateconf['position'];
+				$joinfiles = (int) $templateconf['joinfiles'];
+
+				$sql = 'INSERT INTO '.MAIN_DB_PREFIX.'c_email_templates';
+				$sql .= ' (entity, module, type_template, lang, private, fk_user, datec, label, position, active, enabled, joinfiles, topic, content)';
+				$sql .= ' SELECT '.$entity.", 'procedurespv', '".$typeTemplate."', '".$this->db->escape($langcode)."', 0, NULL, NOW(),";
+				$sql .= " '".$label."', ".$position.', 1, \'isModEnabled("procedurespv")\', '.$joinfiles.", '".$topic."', '".$content."'";
+				$sql .= ' FROM DUAL';
+				$sql .= ' WHERE NOT EXISTS (';
+				$sql .= 'SELECT 1 FROM '.MAIN_DB_PREFIX.'c_email_templates';
+				$sql .= ' WHERE entity = '.$entity;
+				$sql .= " AND module = 'procedurespv'";
+				$sql .= " AND type_template = '".$typeTemplate."'";
+				$sql .= " AND lang = '".$this->db->escape($langcode)."'";
+				$sql .= " AND label = '".$label."'";
+				$sql .= ')';
+
+				$resql = $this->db->query($sql);
+				if (!$resql) {
+					$this->error = $this->db->lasterror();
+					return -2;
+				}
+			}
+		}
+
+		foreach ($templates as $templateconf) {
+			$constName = (string) $templateconf['const'];
+			if (empty($missingEmailTemplateConsts[$constName])) {
+				continue;
+			}
+
+			$templateId = $this->fetchDefaultEmailTemplateId($templateconf, $defaultLang, $entity);
+			if ($templateId <= 0 && $defaultLang !== 'fr_FR') {
+				$templateId = $this->fetchDefaultEmailTemplateId($templateconf, 'fr_FR', $entity);
+			}
+			if ($templateId > 0) {
+				dolibarr_set_const($this->db, $constName, (string) $templateId, 'chaine', 0, '', $entity);
+			}
+		}
+
+		return 1;
+	}
+
+	/**
+	 * Fetch one default email template identifier.
+	 *
+	 * @param array{label:string,type_template:string} $templateconf Template definition
+	 * @param string $langcode Language code
+	 * @param int $entity Entity id
+	 * @return int
+	 */
+	private function fetchDefaultEmailTemplateId($templateconf, $langcode, $entity)
+	{
+		global $conf;
+
+		$outputlangs = new Translate('', $conf);
+		$outputlangs->setDefaultLang($langcode);
+		$outputlangs->loadLangs(array('procedurespv@procedurespv'));
+
+		$sql = 'SELECT rowid';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.'c_email_templates';
+		$sql .= ' WHERE entity = '.((int) $entity);
+		$sql .= " AND module = 'procedurespv'";
+		$sql .= " AND type_template = '".$this->db->escape((string) $templateconf['type_template'])."'";
+		$sql .= " AND lang = '".$this->db->escape($langcode)."'";
+		$sql .= " AND label = '".$this->db->escape($outputlangs->transnoentitiesnoconv((string) $templateconf['label']))."'";
+		$sql .= ' ORDER BY rowid ASC';
+		$sql .= $this->db->plimit(1);
+
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			$this->error = $this->db->lasterror();
+			return -1;
+		}
+
+		$obj = $this->db->fetch_object($resql);
+		$rowid = is_object($obj) ? (int) $obj->rowid : 0;
+		$this->db->free($resql);
+
+		return $rowid;
 	}
 
 	/**

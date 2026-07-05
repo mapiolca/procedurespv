@@ -19,3 +19,6 @@
 - Amélioration du formulaire public de collecte et ajout du SIRET bénéficiaire obligatoire pour les clients de type société.
 - Correction de la gestion du type documentaire natif du modèle PDF mandat ENEDIS dans les réglages.
 - Déclaration des types de modèles de courriels du module dans la liste native Dolibarr.
+- Ajout de trois modèles de courriels natifs par défaut pour la collecte client et les relances.
+- Ajout du logo d’entité, des mentions légales et d’une navigation par ancres dans la page publique de collecte.
+- Génération d’un mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, téléchargement public du mandat signé et tampon entreprise configurable.

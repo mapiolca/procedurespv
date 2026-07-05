@@ -152,3 +152,108 @@ function procedurespvGetRaccordementUploadDir($object)
 
 	return $moduleOutput.'/'.$object->element.'/'.dol_sanitizeFileName((string) $object->ref);
 }
+
+/**
+ * Return module output directory for an entity.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvGetModuleOutputDir($entity = 0)
+{
+	global $conf;
+
+	$entity = $entity > 0 ? $entity : (int) $conf->entity;
+	if (isset($conf->procedurespv->multidir_output[$entity]) && $conf->procedurespv->multidir_output[$entity] !== '') {
+		return (string) $conf->procedurespv->multidir_output[$entity];
+	}
+	if (isset($conf->procedurespv->dir_output) && $conf->procedurespv->dir_output !== '') {
+		return (string) $conf->procedurespv->dir_output;
+	}
+
+	return '';
+}
+
+/**
+ * Return ENEDIS mandate stamp directory for an entity.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvGetMandatStampDir($entity = 0)
+{
+	$moduleOutput = procedurespvGetModuleOutputDir($entity);
+	if ($moduleOutput === '') {
+		return '';
+	}
+
+	return $moduleOutput.'/config';
+}
+
+/**
+ * Return configured ENEDIS mandate stamp relative path for an entity.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvGetMandatStampRelativePath($entity = 0)
+{
+	global $conf, $db;
+
+	$entity = $entity > 0 ? $entity : (int) $conf->entity;
+	$relativePath = '';
+	if (isset($db) && is_object($db) && function_exists('dolibarr_get_const')) {
+		$value = dolibarr_get_const($db, 'PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE', $entity);
+		$relativePath = is_scalar($value) ? (string) $value : '';
+	}
+	if ($relativePath === '' && (int) $entity === (int) $conf->entity) {
+		$relativePath = getDolGlobalString('PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE', '');
+	}
+
+	return trim($relativePath);
+}
+
+/**
+ * Return configured ENEDIS mandate stamp absolute path.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvGetMandatStampPath($entity = 0)
+{
+	$relativePath = procedurespvGetMandatStampRelativePath($entity);
+	if ($relativePath === '' || preg_match('/(^|\/)\.\.(\/|$)/', $relativePath)) {
+		return '';
+	}
+
+	$moduleOutput = procedurespvGetModuleOutputDir($entity);
+	if ($moduleOutput === '') {
+		return '';
+	}
+
+	return $moduleOutput.'/'.$relativePath;
+}
+
+/**
+ * Return configured ENEDIS mandate stamp URL.
+ *
+ * @param int $entity Entity id
+ * @return string
+ */
+function procedurespvGetMandatStampUrl($entity = 0)
+{
+	global $conf;
+
+	$entity = $entity > 0 ? $entity : (int) $conf->entity;
+	$relativePath = procedurespvGetMandatStampRelativePath($entity);
+	if ($relativePath === '' || preg_match('/(^|\/)\.\.(\/|$)/', $relativePath)) {
+		return '';
+	}
+
+	$stampPath = procedurespvGetMandatStampPath($entity);
+	if ($stampPath === '' || !is_readable($stampPath)) {
+		return '';
+	}
+
+	return DOL_URL_ROOT.'/viewimage.php?modulepart=procedurespv&entity='.$entity.'&file='.urlencode($relativePath);
+}

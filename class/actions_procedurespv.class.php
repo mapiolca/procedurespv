@@ -21,6 +21,9 @@ class ActionsProceduresPV
 	/** @var string Email template type for ENEDIS mandate reminders */
 	public const EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT = 'procedurespv_raccordement_relance_mandat';
 
+	/** @var string Runtime placeholder replaced by the generated public intake URL */
+	public const PUBLIC_COLLECTE_URL_PLACEHOLDER = '__PROCEDURESPV_PUBLIC_COLLECTE_URL__';
+
 	/** @var DoliDB Database handler */
 	public $db;
 
@@ -65,6 +68,44 @@ class ActionsProceduresPV
 			self::EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT => array(
 				'label' => 'EmailTemplateTypeRelanceMandat',
 				'picto' => 'email',
+			),
+		);
+	}
+
+	/**
+	 * Return default native email templates created at module activation.
+	 *
+	 * @return array<string,array{const:string,type_template:string,label:string,topic:string,content:string,position:int,joinfiles:int}>
+	 */
+	public static function getDefaultEmailTemplatesDefinition()
+	{
+		return array(
+			'collecte_client' => array(
+				'const' => 'PROCEDURESPV_EMAIL_TEMPLATE_COLLECTE',
+				'type_template' => self::EMAIL_TEMPLATE_TYPE_COLLECTE,
+				'label' => 'DefaultEmailTemplateCollecteLabel',
+				'topic' => 'DefaultEmailTemplateCollecteTopic',
+				'content' => 'DefaultEmailTemplateCollecteContent',
+				'position' => 100,
+				'joinfiles' => 0,
+			),
+			'relance_collecte' => array(
+				'const' => 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE',
+				'type_template' => self::EMAIL_TEMPLATE_TYPE_RELANCE_COLLECTE,
+				'label' => 'DefaultEmailTemplateRelanceCollecteLabel',
+				'topic' => 'DefaultEmailTemplateRelanceCollecteTopic',
+				'content' => 'DefaultEmailTemplateRelanceCollecteContent',
+				'position' => 110,
+				'joinfiles' => 0,
+			),
+			'relance_mandat' => array(
+				'const' => 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT',
+				'type_template' => self::EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT,
+				'label' => 'DefaultEmailTemplateRelanceMandatLabel',
+				'topic' => 'DefaultEmailTemplateRelanceMandatTopic',
+				'content' => 'DefaultEmailTemplateRelanceMandatContent',
+				'position' => 120,
+				'joinfiles' => 0,
 			),
 		);
 	}

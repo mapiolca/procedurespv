@@ -10,6 +10,7 @@
 require '../../../main.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/ajax.lib.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php';
 require_once dol_buildpath('/procedurespv/class/actions_procedurespv.class.php', 0);
@@ -33,6 +34,7 @@ if (!$permissiontosetup) {
 $pdfDocumentTypeMandatEnedis = 'procedurespv_mandatenedis';
 $pdfDocumentConstMandatEnedis = 'PROCEDURESPV_MANDATENEDIS_ADDON_PDF';
 $legacyPdfDocumentConstMandatEnedis = 'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS';
+$stampImageConstMandatEnedis = 'PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE';
 $value = GETPOST('value', 'alphanohtml');
 $label = GETPOST('label', 'restricthtml');
 $scandir = GETPOST('scan_dir', 'restricthtml');
@@ -162,6 +164,100 @@ function procedurespvGetObjectStringProperty($object, $property, $default = '')
 	}
 
 	return (string) $value;
+}
+
+/**
+ * Save uploaded company stamp for the ENEDIS mandate.
+ *
+ * @param DoliDB $db Database handler
+ * @param Translate $langs Translation handler
+ * @param string $constName Constant storing the relative image path
+ * @return int 1 if uploaded, 0 if no upload, -1 on error
+ */
+function procedurespvSaveMandatStampUpload($db, $langs, $constName)
+{
+	global $conf;
+
+	$fieldName = 'PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE_UPLOAD';
+	if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName])) {
+		return 0;
+	}
+
+	$uploadedFile = $_FILES[$fieldName];
+	$uploadErrorCode = isset($uploadedFile['error']) ? (int) $uploadedFile['error'] : UPLOAD_ERR_NO_FILE;
+	if ($uploadErrorCode === UPLOAD_ERR_NO_FILE) {
+		return 0;
+	}
+
+	$errors = array();
+	$originalName = isset($uploadedFile['name']) ? (string) $uploadedFile['name'] : '';
+	$tmpName = isset($uploadedFile['tmp_name']) ? (string) $uploadedFile['tmp_name'] : '';
+	$fileSize = isset($uploadedFile['size']) ? (int) $uploadedFile['size'] : 0;
+	$extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+	$allowedExtensions = array('png', 'jpg', 'jpeg');
+	$maxSize = 2 * 1024 * 1024;
+
+	if ($uploadErrorCode !== UPLOAD_ERR_OK) {
+		$errors[] = $langs->trans('UploadError');
+	}
+	if ($fileSize <= 0 || $fileSize > $maxSize) {
+		$errors[] = $langs->trans('UploadInvalidSize');
+	}
+	if (!in_array($extension, $allowedExtensions, true)) {
+		$errors[] = $langs->trans('UploadInvalidExtension');
+	}
+
+	$mime = '';
+	if ($tmpName !== '' && function_exists('finfo_open')) {
+		$finfo = finfo_open(FILEINFO_MIME_TYPE);
+		if ($finfo !== false) {
+			$detectedMime = finfo_file($finfo, $tmpName);
+			$mime = is_string($detectedMime) ? $detectedMime : '';
+			finfo_close($finfo);
+		}
+	}
+	if ($mime !== '' && !in_array($mime, array('image/png', 'image/jpeg'), true)) {
+		$errors[] = $langs->trans('UploadInvalidMime');
+	}
+
+	if (!empty($errors)) {
+		setEventMessages('', $errors, 'errors');
+		return -1;
+	}
+
+	$stampDir = procedurespvGetMandatStampDir((int) $conf->entity);
+	if ($stampDir === '' || dol_mkdir($stampDir) < 0) {
+		setEventMessages($langs->trans('UploadDirectoryUnavailable'), null, 'errors');
+		return -1;
+	}
+
+	$storedExtension = $extension === 'jpeg' ? 'jpg' : $extension;
+	$storedFilename = 'mandat_enedis_stamp.'.$storedExtension;
+	$relativePath = 'config/'.$storedFilename;
+	$destPath = $stampDir.'/'.$storedFilename;
+
+	foreach (array('png', 'jpg', 'jpeg') as $candidateExtension) {
+		$candidatePath = $stampDir.'/mandat_enedis_stamp.'.$candidateExtension;
+		if ($candidatePath !== $destPath && is_readable($candidatePath)) {
+			dol_delete_file($candidatePath);
+		}
+	}
+
+	$moveResult = dol_move_uploaded_file($tmpName, $destPath, 1, 0, $uploadErrorCode);
+	if ($moveResult <= 0) {
+		setEventMessages($langs->trans('UploadMoveFailed'), null, 'errors');
+		return -1;
+	}
+
+	$result = dolibarr_set_const($db, $constName, $relativePath, 'chaine', 0, '', (int) $conf->entity);
+	if ($result <= 0) {
+		setEventMessages($langs->trans('ErrorSetupNotSaved'), null, 'errors');
+		return -1;
+	}
+
+	$conf->global->{$constName} = $relativePath;
+
+	return 1;
 }
 
 /**
@@ -484,8 +580,25 @@ if ($action === 'updateMask') {
 	} else {
 		setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
 	}
+} elseif ($action === 'delete_stamp') {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
+		accessforbidden($langs->trans('ErrorBadToken'));
+	}
+
+	$stampPath = procedurespvGetMandatStampPath((int) $conf->entity);
+	if ($stampPath !== '' && is_readable($stampPath)) {
+		dol_delete_file($stampPath);
+	}
+
+	$result = dolibarr_del_const($db, $stampImageConstMandatEnedis, (int) $conf->entity);
+	if ($result > 0) {
+		unset($conf->global->{$stampImageConstMandatEnedis});
+		setEventMessages($langs->trans('SetupSaved'), null, 'mesgs');
+	} else {
+		setEventMessages($langs->trans('ErrorSetupNotSaved'), null, 'errors');
+	}
 } elseif ($action === 'save') {
-	if (!GETPOST('token', 'alpha')) {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
 
@@ -532,6 +645,11 @@ if ($action === 'updateMask') {
 		}
 	}
 
+	$stampUploadResult = procedurespvSaveMandatStampUpload($db, $langs, $stampImageConstMandatEnedis);
+	if ($stampUploadResult < 0) {
+		$error++;
+	}
+
 	if ($error) {
 		setEventMessages($langs->trans('ErrorSetupNotSaved'), null, 'errors');
 	} else {
@@ -545,6 +663,9 @@ $defaultMandatDays = getDolGlobalInt('PROCEDURESPV_RELANCE_MANDAT_DAYS', 7);
 $defaultEnedisDays = getDolGlobalInt('PROCEDURESPV_RELANCE_ENEDIS_IDLE_DAYS', 30);
 $maxUploadSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
 $allowedExtensions = getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png');
+$stampImage = getDolGlobalString($stampImageConstMandatEnedis, '');
+$stampImagePath = procedurespvGetMandatStampPath((int) $conf->entity);
+$stampImageUrl = procedurespvGetMandatStampUrl((int) $conf->entity);
 $emailTemplateCollecteId = procedurespvGetEmailTemplateConstId('PROCEDURESPV_EMAIL_TEMPLATE_COLLECTE');
 $emailTemplateRelanceCollecteId = procedurespvGetEmailTemplateConstId('PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE');
 $emailTemplateRelanceMandatId = procedurespvGetEmailTemplateConstId('PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT');
@@ -564,7 +685,7 @@ print load_fiche_titre($langs->trans('ProceduresPVSetup'), $linkback, 'title_set
 $head = procedurespvAdminPrepareHead();
 print dol_get_fiche_head($head, 'settings', $langs->trans('ProceduresPVSetup'), -1, 'fa-solar-panel');
 
-print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
+print '<form method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
 print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="action" value="save">';
 
@@ -593,6 +714,17 @@ print '<tr class="oddeven"><td>'.$langs->trans('RelanceMandatDays').'</td><td><i
 print '<tr class="oddeven"><td>'.$langs->trans('RelanceEnedisIdleDays').'</td><td><input type="number" class="flat width75" name="PROCEDURESPV_RELANCE_ENEDIS_IDLE_DAYS" value="'.((int) $defaultEnedisDays).'"></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('PublicUploadMaxSize').'</td><td><input type="number" class="flat width150" name="PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE" value="'.((int) $maxUploadSize).'"></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('PublicUploadAllowedExtensions').'</td><td><input type="text" class="flat minwidth300" name="PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS" value="'.dol_escape_htmltag($allowedExtensions).'"></td></tr>';
+print '<tr class="oddeven"><td>'.$langs->trans('MandatCompanyStampImage').'</td><td>';
+print '<input type="file" class="flat minwidth300" name="PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE_UPLOAD" accept="image/png,image/jpeg">';
+print '<br><span class="opacitymedium">'.$langs->trans('MandatCompanyStampImageHelp').'</span>';
+if ($stampImage !== '' && $stampImageUrl !== '') {
+	print '<br><img src="'.dol_escape_htmltag($stampImageUrl).'" alt="'.dol_escape_htmltag($langs->trans('MandatCompanyStampImage')).'" style="max-width:180px;max-height:90px;margin-top:8px;">';
+	print '<br><span class="opacitymedium">'.dol_escape_htmltag($stampImage).'</span>';
+	print ' <a class="reposition" href="'.dol_buildpath('/procedurespv/admin/setup.php', 1).'?action=delete_stamp&token='.newToken().'">'.img_picto($langs->trans('Delete'), 'delete').' '.$langs->trans('Delete').'</a>';
+} elseif ($stampImage !== '' && $stampImagePath !== '') {
+	print '<br><span class="warning">'.$langs->trans('MandatCompanyStampImageMissing').'</span>';
+}
+print '</td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('CollecteEmailTemplate').'</td><td>';
 procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_COLLECTE', ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_COLLECTE, $emailTemplateCollecteId);
 print '</td></tr>';

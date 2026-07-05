@@ -112,6 +112,29 @@ class Signature
 	}
 
 	/**
+	 * Fetch latest signature for a raccordement in a known entity.
+	 *
+	 * @param int $fkRaccordement Raccordement id
+	 * @param int $entity Entity id
+	 * @param string $type Signature type
+	 * @return int
+	 */
+	public function fetchLatestForRaccordementEntity($fkRaccordement, $entity, $type = self::TYPE_MANDAT_ENEDIS)
+	{
+		$sql = 'SELECT rowid, entity, fk_raccordement, type_signature, signataire_nom, signataire_fonction, signataire_email,';
+		$sql .= ' signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, date_validation,';
+		$sql .= ' fk_user_valid, motif_non_conformite, datec, tms, import_key';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.'pvproc_signature';
+		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement);
+		$sql .= ' AND entity = '.((int) $entity);
+		$sql .= " AND type_signature = '".$this->db->escape($type)."'";
+		$sql .= ' ORDER BY rowid DESC';
+		$sql .= $this->db->plimit(1);
+
+		return $this->fetchFromSql($sql);
+	}
+
+	/**
 	 * Save a signed mandate.
 	 *
 	 * @param Raccordement $raccordement Parent object
@@ -272,4 +295,3 @@ class Signature
 		$this->import_key = (string) $obj->import_key;
 	}
 }
-
