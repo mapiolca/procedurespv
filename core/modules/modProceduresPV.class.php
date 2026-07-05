@@ -237,6 +237,9 @@ class modProceduresPV extends DolibarrModules
 			return -1;
 		}
 
+		$legacyMandatPdfModel = getDolGlobalString('PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS', '');
+		$mandatPdfModel = $legacyMandatPdfModel !== '' ? $legacyMandatPdfModel : 'mandatenedis';
+
 		$defaults = array(
 			'PROCEDURESPV_USE_CENTRALEPV_IF_AVAILABLE' => '1',
 			'PROCEDURESPV_ALLOW_WITHOUT_CENTRALEPV' => '1',
@@ -252,12 +255,27 @@ class modProceduresPV extends DolibarrModules
 			'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE' => '',
 			'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT' => '',
 			'PROCEDURESPV_RACCORDEMENT_ADDON' => 'mod_pvproc_standard',
+			'PROCEDURESPV_MANDATENEDIS_ADDON_PDF' => $mandatPdfModel,
 			'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS' => 'mandatenedis',
 		);
 
 		foreach ($defaults as $name => $value) {
 			if (getDolGlobalString($name, '__PROCEDURESPV_UNSET__') === '__PROCEDURESPV_UNSET__') {
 				dolibarr_set_const($this->db, $name, $value, 'chaine', 0, '', (int) $conf->entity);
+			}
+		}
+
+		$sqlCheck = 'SELECT rowid';
+		$sqlCheck .= ' FROM '.MAIN_DB_PREFIX.'document_model';
+		$sqlCheck .= " WHERE nom = 'mandatenedis'";
+		$sqlCheck .= " AND type = 'procedurespv_mandatenedis'";
+		$sqlCheck .= ' AND entity = '.((int) $conf->entity);
+		$resql = $this->db->query($sqlCheck);
+		if ($resql) {
+			$num = $this->db->num_rows($resql);
+			$this->db->free($resql);
+			if ((int) $num === 0) {
+				addDocumentModel('mandatenedis', 'procedurespv_mandatenedis', 'mandatenedis', 'procedurespv/core/modules/procedurespv/doc');
 			}
 		}
 

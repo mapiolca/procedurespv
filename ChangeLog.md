@@ -13,3 +13,5 @@
 - Ajout de l’onglet Mise en service avec dates, Consuel, autorisation d’injection et événement Agenda à la réalisation.
 - Ajout de l’onglet Relances avec planification, marquage envoyé/annulé, événement Agenda manuel et indicateurs sur la synthèse.
 - Complément de la configuration module, des filtres opérationnels de liste et de la recette fonctionnelle V1.
+- Remplacement des champs texte de modèles de courriels par des sélecteurs natifs Dolibarr filtrés par type d’objet.
+- Remplacement du champ texte du modèle PDF mandat ENEDIS par la gestion native des modèles de documents Dolibarr.

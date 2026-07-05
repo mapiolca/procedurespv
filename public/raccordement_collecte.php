@@ -20,9 +20,56 @@ require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
-require_once dol_buildpath('/procedurespv/core/modules/procedurespv/doc/pdf_mandatenedis.modules.php', 0);
 
 $langs->loadLangs(array('procedurespv@procedurespv'));
+
+/**
+ * Load configured ENEDIS mandate PDF model.
+ *
+ * @param DoliDB $db Database handler
+ * @return object|null
+ */
+function procedurespvLoadMandatEnedisPdfModel($db)
+{
+	$modelName = getDolGlobalString('PROCEDURESPV_MANDATENEDIS_ADDON_PDF', '');
+	if ($modelName === '') {
+		$modelName = getDolGlobalString('PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS', '');
+	}
+	if ($modelName === '') {
+		$modelName = 'mandatenedis';
+	}
+
+	$modelName = preg_replace('/[^a-zA-Z0-9_]/', '', $modelName);
+	if (!is_string($modelName) || $modelName === '') {
+		$modelName = 'mandatenedis';
+	}
+
+	$file = dol_buildpath('/procedurespv/core/modules/procedurespv/doc/pdf_'.$modelName.'.modules.php', 0);
+	if (!is_readable($file) && $modelName !== 'mandatenedis') {
+		dol_syslog('ProceduresPV: configured mandate PDF model '.$modelName.' not found, fallback to mandatenedis', LOG_WARNING);
+		$modelName = 'mandatenedis';
+		$file = dol_buildpath('/procedurespv/core/modules/procedurespv/doc/pdf_'.$modelName.'.modules.php', 0);
+	}
+	if (!is_readable($file)) {
+		return null;
+	}
+
+	require_once $file;
+
+	$className = 'pdf_'.$modelName;
+	if (!class_exists($className)) {
+		if ($modelName !== 'mandatenedis') {
+			dol_syslog('ProceduresPV: configured mandate PDF class '.$className.' not found, fallback to pdf_mandatenedis', LOG_WARNING);
+			require_once dol_buildpath('/procedurespv/core/modules/procedurespv/doc/pdf_mandatenedis.modules.php', 0);
+			$className = 'pdf_mandatenedis';
+		}
+		if (!class_exists($className)) {
+			return null;
+		}
+	}
+
+	return new $className($db);
+}
 
 $publicToken = GETPOST('public_token', 'alphanohtml');
 if ($publicToken === '') {
@@ -178,34 +225,39 @@ if ($linkUsable && $action === 'submit_collecte') {
 
 	if (empty($uploadErrors)) {
 		$uploadDir = procedurespvGetRaccordementUploadDir($object);
-		$pdfModel = new pdf_mandatenedis($db);
+		$pdfModel = procedurespvLoadMandatEnedisPdfModel($db);
 		$ip = function_exists('getUserRemoteIP') ? getUserRemoteIP() : (isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '');
 		$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
-		$pdfFilename = $pdfModel->write_file($object, $langs, $uploadDir, array(
-			'signataire_nom' => $signataireNom,
-			'signataire_fonction' => $signataireFonction,
-			'signataire_email' => $signataireEmail,
-			'signature_data_url' => $signatureDataUrl,
-			'signature_ip' => $ip,
-			'signature_user_agent' => $userAgent,
-		));
-		if ($pdfFilename === '') {
-			$uploadErrors[] = $langs->trans($pdfModel->error ?: 'ErrorPdfNotGenerated');
+		if (!is_object($pdfModel) || !method_exists($pdfModel, 'write_file')) {
+			$uploadErrors[] = $langs->trans('ErrorPdfNotGenerated');
 		} else {
-			$pdfHash = hash_file('sha256', $uploadDir.'/'.$pdfFilename);
-			$signature = new Signature($db);
-			$signatureId = $signature->createSignedMandate($object, array(
+			$pdfFilename = $pdfModel->write_file($object, $langs, $uploadDir, array(
 				'signataire_nom' => $signataireNom,
 				'signataire_fonction' => $signataireFonction,
 				'signataire_email' => $signataireEmail,
+				'signature_data_url' => $signatureDataUrl,
 				'signature_ip' => $ip,
 				'signature_user_agent' => $userAgent,
-				'filepath' => $uploadDir,
-				'filename' => $pdfFilename,
-				'pdf_hash' => is_string($pdfHash) ? $pdfHash : '',
 			));
-			if ($signatureId <= 0) {
-				$uploadErrors[] = $signature->error;
+			if ($pdfFilename === '') {
+				$errorKey = !empty($pdfModel->error) ? (string) $pdfModel->error : 'ErrorPdfNotGenerated';
+				$uploadErrors[] = $langs->trans($errorKey);
+			} else {
+				$pdfHash = hash_file('sha256', $uploadDir.'/'.$pdfFilename);
+				$signature = new Signature($db);
+				$signatureId = $signature->createSignedMandate($object, array(
+					'signataire_nom' => $signataireNom,
+					'signataire_fonction' => $signataireFonction,
+					'signataire_email' => $signataireEmail,
+					'signature_ip' => $ip,
+					'signature_user_agent' => $userAgent,
+					'filepath' => $uploadDir,
+					'filename' => $pdfFilename,
+					'pdf_hash' => is_string($pdfHash) ? $pdfHash : '',
+				));
+				if ($signatureId <= 0) {
+					$uploadErrors[] = $signature->error;
+				}
 			}
 		}
 	}

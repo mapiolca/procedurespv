@@ -20,6 +20,104 @@ class pdf_mandatenedis
 	public $db;
 
 	/**
+	 * Model name.
+	 *
+	 * @var string
+	 */
+	public $name = 'mandatenedis';
+
+	/**
+	 * Model description translation key.
+	 *
+	 * @var string
+	 */
+	public $description = 'MandatPdfModelDescription';
+
+	/**
+	 * Model version.
+	 *
+	 * @var string
+	 */
+	public $version = 'dolibarr';
+
+	/**
+	 * Output type.
+	 *
+	 * @var string
+	 */
+	public $type = 'pdf';
+
+	/**
+	 * Directory scanned by Dolibarr document model administration.
+	 *
+	 * @var string
+	 */
+	public $scandir = 'procedurespv/core/modules/procedurespv/doc';
+
+	/**
+	 * Native Dolibarr document model type.
+	 *
+	 * @var string
+	 */
+	public $document_model_type = 'procedurespv_mandatenedis';
+
+	/**
+	 * PDF page width.
+	 *
+	 * @var int
+	 */
+	public $page_largeur = 210;
+
+	/**
+	 * PDF page height.
+	 *
+	 * @var int
+	 */
+	public $page_hauteur = 297;
+
+	/**
+	 * PDF format.
+	 *
+	 * @var array{0:int,1:int}
+	 */
+	public $format = array(210, 297);
+
+	/**
+	 * Logo support flag.
+	 *
+	 * @var int
+	 */
+	public $option_logo = 0;
+
+	/**
+	 * Multilanguage support flag.
+	 *
+	 * @var int
+	 */
+	public $option_multilang = 1;
+
+	/**
+	 * Free text support flag.
+	 *
+	 * @var int
+	 */
+	public $option_freetext = 0;
+
+	/**
+	 * Draft watermark support flag.
+	 *
+	 * @var int
+	 */
+	public $option_draft_watermark = 0;
+
+	/**
+	 * Minimum PHP version.
+	 *
+	 * @var array{0:int,1:int}
+	 */
+	public $phpmin = array(8, 0);
+
+	/**
 	 * Error message.
 	 *
 	 * @var string
@@ -34,6 +132,17 @@ class pdf_mandatenedis
 	public function __construct($db)
 	{
 		$this->db = $db;
+	}
+
+	/**
+	 * Return model information for native Dolibarr setup tables.
+	 *
+	 * @param Translate $langs Translation handler
+	 * @return string
+	 */
+	public function info($langs)
+	{
+		return $langs->trans('MandatPdfModelDescription');
 	}
 
 	/**
@@ -171,4 +280,3 @@ class pdf_mandatenedis
 		return is_string($decoded) ? $decoded : '';
 	}
 }
-

@@ -55,6 +55,8 @@ class ProceduresPVCompatibility
 	{
 		$dolibarr20 = self::isDolibarrVersionAtLeast('20.0.0');
 		$php80 = self::isPhpVersionAtLeast('8.0.0');
+		$nativeEmailTemplates = defined('DOL_DOCUMENT_ROOT') && is_readable(DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php');
+		$nativeDocumentModels = defined('DOL_DOCUMENT_ROOT') && is_readable(DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php');
 
 		return array(
 			'module_base' => array(
@@ -78,6 +80,28 @@ class ProceduresPVCompatibility
 				'compatibility_check' => "function_exists('getDolGlobalInt') && function_exists('isModEnabled')",
 				'available' => function_exists('getDolGlobalInt') && function_exists('isModEnabled'),
 				'reason' => (function_exists('getDolGlobalInt') && function_exists('isModEnabled')) ? '' : 'RequiresDolibarr20NativeHelpers',
+			),
+			'native_email_templates' => array(
+				'label' => 'CompatibilityFeatureNativeEmailTemplates',
+				'description' => 'CompatibilityFeatureNativeEmailTemplatesDescription',
+				'min_dolibarr' => '20.0.0',
+				'core_available_from' => '20.0.0',
+				'module_available_from' => '20.0.0',
+				'min_php' => '8.0.0',
+				'compatibility_check' => "is_readable(DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php')",
+				'available' => $nativeEmailTemplates,
+				'reason' => $nativeEmailTemplates ? '' : 'RequiresNativeEmailTemplates',
+			),
+			'native_document_models' => array(
+				'label' => 'CompatibilityFeatureNativeDocumentModels',
+				'description' => 'CompatibilityFeatureNativeDocumentModelsDescription',
+				'min_dolibarr' => '20.0.0',
+				'core_available_from' => '20.0.0',
+				'module_available_from' => '20.0.0',
+				'min_php' => '8.0.0',
+				'compatibility_check' => "is_readable(DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php')",
+				'available' => $nativeDocumentModels,
+				'reason' => $nativeDocumentModels ? '' : 'RequiresNativeDocumentModels',
 			),
 		);
 	}
@@ -113,4 +137,3 @@ class ProceduresPVCompatibility
 		return $unavailable;
 	}
 }
-
