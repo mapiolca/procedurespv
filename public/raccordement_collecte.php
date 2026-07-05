@@ -560,9 +560,14 @@ llxHeader('', $langs->trans('PublicCollecteTitle'), '', '', 0, 0, '', '', '', 'm
 print <<<'HTML'
 <style>
 .public-procedurespv {
+	box-sizing: border-box;
 	display: flex;
 	justify-content: center;
+	width: 100vw;
+	max-width: 100vw;
 	min-height: calc(100vh - 70px);
+	margin-left: calc(50% - 50vw);
+	margin-right: calc(50% - 50vw);
 	padding: clamp(18px, 4vw, 46px);
 	background: linear-gradient(180deg, #f7fbfb 0%, #eef6f2 100%);
 	color: #1f2933;
