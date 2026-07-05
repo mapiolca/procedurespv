@@ -559,15 +559,27 @@ llxHeader('', $langs->trans('PublicCollecteTitle'), '', '', 0, 0, '', '', '', 'm
 
 print <<<'HTML'
 <style>
+body.page-public-collecte #id-container,
+body.page-public-collecte #id-right {
+	display: block;
+	width: 100%;
+}
+body.page-public-collecte #id-right {
+	padding-top: 0;
+	padding-bottom: 0;
+}
+body.page-public-collecte div.fiche {
+	margin-left: 0 !important;
+	margin-right: 0 !important;
+}
 .public-procedurespv {
 	box-sizing: border-box;
 	display: flex;
 	justify-content: center;
-	width: 100vw;
-	max-width: 100vw;
+	width: 100%;
+	max-width: none;
 	min-height: calc(100vh - 70px);
-	margin-left: calc(50% - 50vw);
-	margin-right: calc(50% - 50vw);
+	margin: 0;
 	padding: clamp(18px, 4vw, 46px);
 	background: linear-gradient(180deg, #f7fbfb 0%, #eef6f2 100%);
 	color: #1f2933;
