@@ -28,7 +28,7 @@ class modProceduresPV extends DolibarrModules
 		$this->numero = 450009;
 		$this->rights_class = 'procedurespv';
 		$this->family = 'Les Métiers du Bâtiment';
-		$this->module_position = 500;
+		$this->module_position = 91;
 		$this->name = preg_replace('/^mod/i', '', get_class($this));
 		$this->description = 'ProceduresPVModuleDescription';
 		$this->descriptionlong = 'ProceduresPVModuleDescriptionLong';
