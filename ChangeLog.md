@@ -17,3 +17,5 @@
 - Remplacement du champ texte du modèle PDF mandat ENEDIS par la gestion native des modèles de documents Dolibarr.
 - Correction de la désactivation du module en appelant `_remove()` avec la signature native Dolibarr.
 - Amélioration du formulaire public de collecte et ajout du SIRET bénéficiaire obligatoire pour les clients de type société.
+- Correction de la gestion du type documentaire natif du modèle PDF mandat ENEDIS dans les réglages.
+- Déclaration des types de modèles de courriels du module dans la liste native Dolibarr.

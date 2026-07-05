@@ -40,7 +40,7 @@ class Raccordement extends CommonObject
 	 *
 	 * @var string
 	 */
-	public $picto = 'fa-solar-panel';
+	public $picto = 'fa-plug';
 
 	/**
 	 * Multientity mode.

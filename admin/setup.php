@@ -12,6 +12,7 @@ require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/ajax.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php';
+require_once dol_buildpath('/procedurespv/class/actions_procedurespv.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/core/modules/procedurespv/modules_raccordement.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
@@ -32,10 +33,10 @@ if (!$permissiontosetup) {
 $pdfDocumentTypeMandatEnedis = 'procedurespv_mandatenedis';
 $pdfDocumentConstMandatEnedis = 'PROCEDURESPV_MANDATENEDIS_ADDON_PDF';
 $legacyPdfDocumentConstMandatEnedis = 'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS';
-$value = GETPOST('value', 'alpha');
+$value = GETPOST('value', 'alphanohtml');
 $label = GETPOST('label', 'restricthtml');
 $scandir = GETPOST('scan_dir', 'restricthtml');
-$type = GETPOST('type', 'alpha');
+$type = GETPOST('type', 'alphanohtml');
 if ($type === '') {
 	$type = $pdfDocumentTypeMandatEnedis;
 }
@@ -431,7 +432,7 @@ if ($action === 'updateMask') {
 		}
 	}
 } elseif (in_array($action, array('set', 'del', 'setdoc', 'unsetdoc'), true)) {
-	if (!GETPOST('token', 'alpha')) {
+	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
 
@@ -593,13 +594,13 @@ print '<tr class="oddeven"><td>'.$langs->trans('RelanceEnedisIdleDays').'</td><t
 print '<tr class="oddeven"><td>'.$langs->trans('PublicUploadMaxSize').'</td><td><input type="number" class="flat width150" name="PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE" value="'.((int) $maxUploadSize).'"></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('PublicUploadAllowedExtensions').'</td><td><input type="text" class="flat minwidth300" name="PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS" value="'.dol_escape_htmltag($allowedExtensions).'"></td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('CollecteEmailTemplate').'</td><td>';
-procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_COLLECTE', 'procedurespv_raccordement_collecte', $emailTemplateCollecteId);
+procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_COLLECTE', ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_COLLECTE, $emailTemplateCollecteId);
 print '</td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('CollecteReminderEmailTemplate').'</td><td>';
-procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE', 'procedurespv_raccordement_relance_collecte', $emailTemplateRelanceCollecteId);
+procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_COLLECTE', ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_RELANCE_COLLECTE, $emailTemplateRelanceCollecteId);
 print '</td></tr>';
 print '<tr class="oddeven"><td>'.$langs->trans('MandatReminderEmailTemplate').'</td><td>';
-procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT', 'procedurespv_raccordement_relance_mandat', $emailTemplateRelanceMandatId);
+procedurespvPrintEmailTemplateSelect($formmail, $langs, $user, 'PROCEDURESPV_EMAIL_TEMPLATE_RELANCE_MANDAT', ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT, $emailTemplateRelanceMandatId);
 print '</td></tr>';
 
 print '</table>';

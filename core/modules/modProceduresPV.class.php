@@ -40,6 +40,10 @@ class modProceduresPV extends DolibarrModules
 
 		$this->module_parts = array(
 			'models' => 1,
+			'hooks' => array(
+				'data' => array('emailtemplates'),
+				'entity' => '0',
+			),
 		);
 		$this->dirs = array('/procedurespv/temp');
 		$this->config_page_url = array('setup.php@procedurespv');
@@ -185,6 +189,7 @@ class modProceduresPV extends DolibarrModules
 			'fk_menu' => 'fk_mainmenu='.$mainmenu,
 			'type' => 'left',
 			'titre' => 'Raccordement',
+			'prefix' => img_picto('', 'fa-plug', 'class="paddingright pictofixedwidth valignmiddle"'),
 			'mainmenu' => $mainmenu,
 			'leftmenu' => 'procedurespv_raccordement',
 			'url' => '/custom/procedurespv/raccordement/list.php',
