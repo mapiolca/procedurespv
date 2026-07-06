@@ -13,13 +13,13 @@
 class ActionsProceduresPV
 {
 	/** @var string Email template type for customer intake links */
-	public const EMAIL_TEMPLATE_TYPE_COLLECTE = 'procedurespv_raccordement_collecte';
+	public const EMAIL_TEMPLATE_TYPE_COLLECTE = 'procedurespv_collecte';
 
 	/** @var string Email template type for customer intake reminders */
-	public const EMAIL_TEMPLATE_TYPE_RELANCE_COLLECTE = 'procedurespv_raccordement_relance_collecte';
+	public const EMAIL_TEMPLATE_TYPE_RELANCE_COLLECTE = 'procedurespv_relance_collecte';
 
 	/** @var string Email template type for ENEDIS mandate reminders */
-	public const EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT = 'procedurespv_raccordement_relance_mandat';
+	public const EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT = 'procedurespv_relance_mandat';
 
 	/** @var string Runtime placeholder replaced by the generated public intake URL */
 	public const PUBLIC_COLLECTE_URL_PLACEHOLDER = '__PROCEDURESPV_PUBLIC_COLLECTE_URL__';

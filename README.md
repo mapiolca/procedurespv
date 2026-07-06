@@ -17,6 +17,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Dépôt public de pièces avec contrôle taille, extension et MIME.
 - Signature simple du mandat ENEDIS, génération PDF et hash SHA-256.
 - Mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, avec téléchargement public après soumission et tampon entreprise configurable.
+- Collecte publique entreprise enrichie selon la fiche DDR ENEDIS : société, représentant, site, raccordement existant et pièces obligatoires, avec CARD conditionnelle.
 - Sélection des modèles de courriels depuis les modèles natifs Dolibarr par type d’objet.
 - Sélection native du modèle PDF du mandat ENEDIS dans les modèles de documents Dolibarr.
 - Onglets internes : Collecte client, Demande ENEDIS, CARDi, Convention / contrat, Mise en service, Relances.
@@ -37,7 +38,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Pas de synchronisation ENEDIS.
 - Le formulaire public CARDi est prévu mais désactivé en V1.
 - Les relances automatiques par cron ne sont pas encore activées ; la classe `Relance` expose `findDueRelances()` pour le lot suivant.
-- Les modèles de courriels doivent être créés dans l’administration native Dolibarr avec les types `procedurespv_raccordement_collecte`, `procedurespv_raccordement_relance_collecte` ou `procedurespv_raccordement_relance_mandat`.
+- Les modèles de courriels doivent être créés dans l’administration native Dolibarr avec les types `procedurespv_collecte`, `procedurespv_relance_collecte` ou `procedurespv_relance_mandat`.
 
 ## Recette
 

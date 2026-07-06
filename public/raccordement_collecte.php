@@ -273,6 +273,150 @@ function procedurespvPublicPrintLegalFooter($langs, array $legalData)
 	print '</footer>';
 }
 
+/**
+ * Return public upload definitions.
+ *
+ * @param string $clientType Client type
+ * @param string $pdlChoice PDL choice
+ * @param string $siteAlreadyConnected Site already connected flag
+ * @return array<int,array{code:string,input:string,label:string,help:string,company_only:int,pdl_other_only:int,required:int}>
+ */
+function procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice = '', $siteAlreadyConnected = '')
+{
+	$isCompany = $clientType === 'societe';
+	$isOtherPdl = $isCompany && $siteAlreadyConnected === 'yes' && $pdlChoice === 'existing_other_legal_entity';
+
+	return array(
+		array(
+			'code' => 'facture_electricite',
+			'input' => 'piece_facture_electricite',
+			'label' => 'PieceFactureElectricite',
+			'help' => 'PublicElectricityBillHelp',
+			'company_only' => 0,
+			'pdl_other_only' => 0,
+			'required' => $isCompany ? 1 : 0,
+		),
+		array(
+			'code' => 'kbis_beneficiaire',
+			'input' => 'piece_kbis_beneficiaire',
+			'label' => 'PieceKbisBeneficiary',
+			'help' => 'PieceKbisBeneficiaryHelp',
+			'company_only' => 1,
+			'pdl_other_only' => 0,
+			'required' => $isCompany ? 1 : 0,
+		),
+		array(
+			'code' => 'kbis_etablissement_production',
+			'input' => 'piece_kbis_etablissement_production',
+			'label' => 'PieceKbisProductionSite',
+			'help' => 'PieceKbisProductionSiteHelp',
+			'company_only' => 1,
+			'pdl_other_only' => 0,
+			'required' => $isCompany ? 1 : 0,
+		),
+		array(
+			'code' => 'autorisation_administrative',
+			'input' => 'piece_autorisation_administrative',
+			'label' => 'PieceAdministrativeAuthorization',
+			'help' => 'PieceAdministrativeAuthorizationHelp',
+			'company_only' => 1,
+			'pdl_other_only' => 0,
+			'required' => $isCompany ? 1 : 0,
+		),
+		array(
+			'code' => 'card_pdl_tiers',
+			'input' => 'piece_card_pdl_tiers',
+			'label' => 'PieceCardPdlOtherLegalEntity',
+			'help' => 'PieceCardPdlOtherLegalEntityHelp',
+			'company_only' => 1,
+			'pdl_other_only' => 1,
+			'required' => $isOtherPdl ? 1 : 0,
+		),
+	);
+}
+
+/**
+ * Store one uploaded public piece.
+ *
+ * @param Translate $langs Language handler
+ * @param Raccordement $object Raccordement
+ * @param array{code:string,input:string,label:string,help:string,company_only:int,pdl_other_only:int,required:int} $definition Piece definition
+ * @param array<int,string> $uploadErrors Upload errors
+ * @return int Stored piece id, 0 if no upload, -1 on error
+ */
+function procedurespvPublicStoreUploadedPiece($langs, $object, array $definition, array &$uploadErrors)
+{
+	global $db;
+
+	$fieldName = $definition['input'];
+	if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
+		return 0;
+	}
+
+	$uploadedFile = $_FILES[$fieldName];
+	$uploadErrorCode = isset($uploadedFile['error']) ? (int) $uploadedFile['error'] : UPLOAD_ERR_NO_FILE;
+	$originalName = isset($uploadedFile['name']) ? (string) $uploadedFile['name'] : '';
+	$tmpName = isset($uploadedFile['tmp_name']) ? (string) $uploadedFile['tmp_name'] : '';
+	$fileSize = isset($uploadedFile['size']) ? (int) $uploadedFile['size'] : 0;
+	$extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+	$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
+	$maxSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
+	$localErrors = array();
+
+	if ($uploadErrorCode !== UPLOAD_ERR_OK) {
+		$localErrors[] = $langs->trans('UploadError');
+	}
+	if ($fileSize <= 0 || $fileSize > $maxSize) {
+		$localErrors[] = $langs->trans('UploadInvalidSize');
+	}
+	if ($extension === '' || !in_array($extension, $allowedExtensions, true)) {
+		$localErrors[] = $langs->trans('UploadInvalidExtension');
+	}
+
+	$mime = '';
+	if ($tmpName !== '' && function_exists('finfo_open')) {
+		$finfo = finfo_open(FILEINFO_MIME_TYPE);
+		if ($finfo !== false) {
+			$detectedMime = finfo_file($finfo, $tmpName);
+			$mime = is_string($detectedMime) ? $detectedMime : '';
+			finfo_close($finfo);
+		}
+	}
+	if ($mime === '' || stripos($mime, 'php') !== false || stripos($mime, 'executable') !== false) {
+		$localErrors[] = $langs->trans('UploadInvalidMime');
+	}
+
+	if (!empty($localErrors)) {
+		foreach ($localErrors as $localError) {
+			$uploadErrors[] = $langs->trans('UploadErrorForPiece', $langs->trans($definition['label']), $localError);
+		}
+		return -1;
+	}
+
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	if ($uploadDir === '' || dol_mkdir($uploadDir) < 0) {
+		$uploadErrors[] = $langs->trans('UploadDirectoryUnavailable');
+		return -1;
+	}
+
+	$storedFilename = $definition['code'].'_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S').'_'.dol_sanitizeFileName($originalName);
+	$destPath = $uploadDir.'/'.$storedFilename;
+	$moveResult = dol_move_uploaded_file($tmpName, $destPath, 1, 0, $uploadErrorCode);
+	if ($moveResult <= 0) {
+		$uploadErrors[] = $langs->trans('UploadMoveFailed');
+		return -1;
+	}
+
+	$piece = new Piece($db);
+	$uploadedPieceId = $piece->createOrUpdateUploaded($object, $definition['code'], $langs->transnoentitiesnoconv($definition['label']), 'client', $uploadDir, $storedFilename, (int) $definition['required']);
+	if ($uploadedPieceId <= 0) {
+		$uploadErrors[] = $piece->error;
+		return -1;
+	}
+
+	return $uploadedPieceId;
+}
+
 $publicToken = GETPOST('public_token', 'alphanohtml');
 $action = GETPOST('action', 'aZ09');
 $submissionDone = false;
@@ -330,15 +474,39 @@ $formClientName = $isSubmitCollecte ? GETPOST('client_name', 'restricthtml') : '
 $formClientSiret = $isSubmitCollecte ? GETPOST('client_siret', 'alphanohtml') : '';
 $formClientEmail = $isSubmitCollecte ? GETPOST('client_email', 'restricthtml') : (string) $publicLink->email_destinataire;
 $formClientPhone = $isSubmitCollecte ? GETPOST('client_phone', 'alphanohtml') : '';
+$formCompanyInseeCode = $isSubmitCollecte ? GETPOST('company_insee_code', 'alphanohtml') : '';
+$formCompanyCapital = $isSubmitCollecte ? GETPOST('company_capital', 'alphanohtml') : '';
+$formCompanyLegalForm = $isSubmitCollecte ? GETPOST('company_legal_form', 'restricthtml') : '';
+$formCompanySize = $isSubmitCollecte ? GETPOST('company_size', 'alphanohtml') : 'pme';
+$formCompanyNaceSector = $isSubmitCollecte ? GETPOST('company_nace_sector', 'restricthtml') : '';
+$formRepresentativeLastname = $isSubmitCollecte ? GETPOST('representative_lastname', 'restricthtml') : '';
+$formRepresentativeFirstname = $isSubmitCollecte ? GETPOST('representative_firstname', 'restricthtml') : '';
+$formRepresentativeMobile = $isSubmitCollecte ? GETPOST('representative_mobile', 'alphanohtml') : '';
+$formRepresentativeAuthorized = $isSubmitCollecte ? GETPOST('representative_authorized', 'alphanohtml') : 'yes';
+$formHeadquartersAddress = $isSubmitCollecte ? GETPOST('headquarters_address', 'restricthtml') : '';
+$formHeadquartersZip = $isSubmitCollecte ? GETPOST('headquarters_zip', 'alphanohtml') : '';
+$formHeadquartersTown = $isSubmitCollecte ? GETPOST('headquarters_town', 'restricthtml') : '';
+$formProducerIsBuildingOwner = $isSubmitCollecte ? GETPOST('producer_is_building_owner', 'alphanohtml') : 'yes';
+$formBuildingOwnerName = $isSubmitCollecte ? GETPOST('building_owner_name', 'restricthtml') : '';
+$formBuildingAlreadyBuilt = $isSubmitCollecte ? GETPOST('building_already_built', 'alphanohtml') : 'yes';
 $formSiteName = $isSubmitCollecte ? GETPOST('site_name', 'restricthtml') : (string) $object->site_name_snapshot;
+$formProductionSiteSiret = $isSubmitCollecte ? GETPOST('production_site_siret', 'alphanohtml') : '';
 $formSiteAddress = $isSubmitCollecte ? GETPOST('site_address', 'restricthtml') : (string) $object->site_address_snapshot;
 $formSiteZip = $isSubmitCollecte ? GETPOST('site_zip', 'alphanohtml') : (string) $object->site_zip_snapshot;
 $formSiteTown = $isSubmitCollecte ? GETPOST('site_town', 'restricthtml') : (string) $object->site_town_snapshot;
 $formPrm = $isSubmitCollecte ? GETPOST('prm', 'alphanohtml') : (string) $object->prm;
 $formTypeReseau = $isSubmitCollecte ? GETPOST('type_reseau', 'alphanohtml') : (string) $object->type_reseau;
+$formSiteAlreadyConnected = $isSubmitCollecte ? GETPOST('site_already_connected', 'alphanohtml') : 'yes';
+$formExistingConnectionType = $isSubmitCollecte ? GETPOST('existing_connection_type', 'alphanohtml') : 'bt_soutirage';
+$formPdlChoice = $isSubmitCollecte ? GETPOST('pdl_choice', 'alphanohtml') : 'new_pdl';
+$formPuissanceSouscrite = $isSubmitCollecte ? GETPOST('puissance_souscrite', 'alphanohtml') : (string) $object->puissance_souscrite;
+$formPdlContractHolder = $isSubmitCollecte ? GETPOST('pdl_contract_holder', 'restricthtml') : '';
 $formTypeExploitation = $isSubmitCollecte ? GETPOST('type_exploitation', 'alphanohtml') : (string) $object->type_exploitation;
 $formPuissanceInstallee = $isSubmitCollecte ? GETPOST('puissance_installee_kwc', 'alphanohtml') : (string) $object->puissance_installee_kwc;
 $formPuissanceInjection = $isSubmitCollecte ? GETPOST('puissance_injection_kva', 'alphanohtml') : (string) $object->puissance_injection_kva;
+$formNoRelatedProjectAttestation = $isSubmitCollecte ? GETPOST('no_related_project_attestation', 'alphanohtml') : 'yes';
+$formRelatedProjectReferences = $isSubmitCollecte ? GETPOST('related_project_references', 'restricthtml') : '';
+$formEnedisRequestType = $isSubmitCollecte ? GETPOST('enedis_request_type', 'alphanohtml') : 'enedis_full';
 $formSignataireNom = $isSubmitCollecte ? GETPOST('signataire_nom', 'restricthtml') : '';
 $formSignataireFonction = $isSubmitCollecte ? GETPOST('signataire_fonction', 'restricthtml') : '';
 $formSignataireEmail = $isSubmitCollecte ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
@@ -367,79 +535,66 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$clientSiret = is_string($clientSiret) ? $clientSiret : '';
 	$clientEmail = $formClientEmail;
 	$clientPhone = $formClientPhone;
+	$companyInseeCode = $formCompanyInseeCode;
+	$companyCapital = $formCompanyCapital;
+	$companyLegalForm = $formCompanyLegalForm;
+	$companySize = $formCompanySize;
+	$companyNaceSector = $formCompanyNaceSector;
+	$representativeLastname = $formRepresentativeLastname;
+	$representativeFirstname = $formRepresentativeFirstname;
+	$representativeMobile = $formRepresentativeMobile;
+	$representativeAuthorized = $formRepresentativeAuthorized;
+	$headquartersAddress = $formHeadquartersAddress;
+	$headquartersZip = $formHeadquartersZip;
+	$headquartersTown = $formHeadquartersTown;
+	$producerIsBuildingOwner = $formProducerIsBuildingOwner;
+	$buildingOwnerName = $formBuildingOwnerName;
+	$buildingAlreadyBuilt = $formBuildingAlreadyBuilt;
 	$siteName = $formSiteName;
+	$productionSiteSiret = preg_replace('/\D+/', '', $formProductionSiteSiret);
+	$productionSiteSiret = is_string($productionSiteSiret) ? $productionSiteSiret : '';
 	$siteAddress = $formSiteAddress;
 	$siteZip = $formSiteZip;
 	$siteTown = $formSiteTown;
 	$prm = $formPrm;
 	$typeReseau = $formTypeReseau;
+	$siteAlreadyConnected = $formSiteAlreadyConnected;
+	$existingConnectionType = $formExistingConnectionType;
+	$pdlChoice = $formPdlChoice;
+	$puissanceSouscrite = $formPuissanceSouscrite;
+	$pdlContractHolder = $formPdlContractHolder;
 	$typeExploitation = $formTypeExploitation;
 	$puissanceInstallee = (float) price2num($formPuissanceInstallee);
 	$puissanceInjection = (float) price2num($formPuissanceInjection);
+	$noRelatedProjectAttestation = $formNoRelatedProjectAttestation;
+	$relatedProjectReferences = $formRelatedProjectReferences;
+	$enedisRequestType = $formEnedisRequestType;
 	$signataireNom = $formSignataireNom;
 	$signataireFonction = $formSignataireFonction;
 	$signataireEmail = $formSignataireEmail;
 	$mandatAcceptance = $formMandatAcceptance;
 	$signatureDataUrl = GETPOST('signature_data_url', 'restricthtml');
 	$uploadErrors = array();
-	$uploadedPieceId = 0;
+	$uploadedPieceIds = array();
 	$signatureId = 0;
 
-	$uploadedFile = null;
-	if (isset($_FILES['piece_facture_electricite']) && is_array($_FILES['piece_facture_electricite'])) {
-		$uploadedFile = $_FILES['piece_facture_electricite'];
+	if ($clientType === 'societe' && $signataireNom === '' && trim($representativeFirstname.' '.$representativeLastname) !== '') {
+		$signataireNom = trim($representativeFirstname.' '.$representativeLastname);
 	}
 
-	if (is_array($uploadedFile) && !empty($uploadedFile['name'])) {
-		$uploadErrorCode = isset($uploadedFile['error']) ? (int) $uploadedFile['error'] : UPLOAD_ERR_NO_FILE;
-		$originalName = isset($uploadedFile['name']) ? (string) $uploadedFile['name'] : '';
-		$tmpName = isset($uploadedFile['tmp_name']) ? (string) $uploadedFile['tmp_name'] : '';
-		$fileSize = isset($uploadedFile['size']) ? (int) $uploadedFile['size'] : 0;
-		$extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
-		$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
-		$maxSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
-
-		if ($uploadErrorCode !== UPLOAD_ERR_OK) {
-			$uploadErrors[] = $langs->trans('UploadError');
+	foreach (procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice, $siteAlreadyConnected) as $pieceDefinition) {
+		if ((int) $pieceDefinition['company_only'] && $clientType !== 'societe') {
+			continue;
 		}
-		if ($fileSize <= 0 || $fileSize > $maxSize) {
-			$uploadErrors[] = $langs->trans('UploadInvalidSize');
+		if ((int) $pieceDefinition['pdl_other_only'] && ($siteAlreadyConnected !== 'yes' || $pdlChoice !== 'existing_other_legal_entity')) {
+			continue;
 		}
-		if ($extension === '' || !in_array($extension, $allowedExtensions, true)) {
-			$uploadErrors[] = $langs->trans('UploadInvalidExtension');
+		$uploadedPieceId = procedurespvPublicStoreUploadedPiece($langs, $object, $pieceDefinition, $uploadErrors);
+		if ($uploadedPieceId > 0) {
+			$uploadedPieceIds[$pieceDefinition['code']] = $uploadedPieceId;
 		}
-
-		$mime = '';
-		if ($tmpName !== '' && function_exists('finfo_open')) {
-			$finfo = finfo_open(FILEINFO_MIME_TYPE);
-			if ($finfo !== false) {
-				$detectedMime = finfo_file($finfo, $tmpName);
-				$mime = is_string($detectedMime) ? $detectedMime : '';
-				finfo_close($finfo);
-			}
-		}
-		if ($mime === '' || stripos($mime, 'php') !== false || stripos($mime, 'executable') !== false) {
-			$uploadErrors[] = $langs->trans('UploadInvalidMime');
-		}
-
-		if (empty($uploadErrors)) {
-			$uploadDir = procedurespvGetRaccordementUploadDir($object);
-			if ($uploadDir === '' || dol_mkdir($uploadDir) < 0) {
-				$uploadErrors[] = $langs->trans('UploadDirectoryUnavailable');
-			} else {
-				$storedFilename = 'facture_electricite_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S').'_'.dol_sanitizeFileName($originalName);
-				$destPath = $uploadDir.'/'.$storedFilename;
-				$moveResult = dol_move_uploaded_file($tmpName, $destPath, 1, 0, $uploadErrorCode);
-				if ($moveResult <= 0) {
-					$uploadErrors[] = $langs->trans('UploadMoveFailed');
-				} else {
-					$piece = new Piece($db);
-					$uploadedPieceId = $piece->createOrUpdateUploaded($object, 'facture_electricite', $langs->transnoentitiesnoconv('PieceFactureElectricite'), 'client', $uploadDir, $storedFilename, 1);
-					if ($uploadedPieceId <= 0) {
-						$uploadErrors[] = $piece->error;
-					}
-				}
-			}
+		if ((int) $pieceDefinition['required'] && $uploadedPieceId === 0) {
+			$uploadErrors[] = $langs->trans('RequiredDocumentMissing', $langs->trans($pieceDefinition['label']));
 		}
 	}
 
@@ -449,7 +604,39 @@ if ($linkUsable && $action === 'submit_collecte') {
 		'client_siret' => $clientSiret,
 		'client_email' => $clientEmail,
 		'client_phone' => $clientPhone,
-		'uploaded_piece_id' => $uploadedPieceId,
+		'company' => array(
+			'insee_code' => $companyInseeCode,
+			'capital' => $companyCapital,
+			'legal_form' => $companyLegalForm,
+			'size' => $companySize,
+			'nace_sector' => $companyNaceSector,
+		),
+		'representative' => array(
+			'lastname' => $representativeLastname,
+			'firstname' => $representativeFirstname,
+			'mobile' => $representativeMobile,
+			'authorized' => $representativeAuthorized,
+			'headquarters_address' => $headquartersAddress,
+			'headquarters_zip' => $headquartersZip,
+			'headquarters_town' => $headquartersTown,
+			'producer_is_building_owner' => $producerIsBuildingOwner,
+			'building_owner_name' => $buildingOwnerName,
+			'building_already_built' => $buildingAlreadyBuilt,
+		),
+		'production_site' => array(
+			'siret' => $productionSiteSiret,
+			'already_connected' => $siteAlreadyConnected,
+			'existing_connection_type' => $existingConnectionType,
+			'pdl_choice' => $pdlChoice,
+			'subscribed_power' => $puissanceSouscrite,
+			'pdl_contract_holder' => $pdlContractHolder,
+		),
+		'production' => array(
+			'no_related_project_attestation' => $noRelatedProjectAttestation,
+			'related_project_references' => $relatedProjectReferences,
+			'enedis_request_type' => $enedisRequestType,
+		),
+		'uploaded_piece_ids' => $uploadedPieceIds,
 	);
 
 	$object->site_name_snapshot = $siteName;
@@ -458,6 +645,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$object->site_town_snapshot = $siteTown;
 	$object->prm = $prm;
 	$object->type_reseau = $typeReseau;
+	$object->puissance_souscrite = $puissanceSouscrite;
 	$object->type_exploitation = $typeExploitation;
 	$object->puissance_installee_kwc = $puissanceInstallee;
 	$object->puissance_injection_kva = $puissanceInjection;
@@ -465,9 +653,64 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$object->date_mandat_signature = dol_now();
 	$object->status = 4;
 	$object->context['trigger_reason'] = 'public_collecte_submitted';
-	$object->context['changed_fields'] = array('status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
+	$object->context['changed_fields'] = array('status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'puissance_souscrite', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
 	if ($clientType === 'societe' && $clientSiret === '') {
 		$uploadErrors[] = $langs->trans('BeneficiarySiretRequired');
+	}
+	if ($clientType === 'societe') {
+		$requiredCompanyFields = array(
+			'client_name' => array($clientName, 'NameOrCompany'),
+			'company_insee_code' => array($companyInseeCode, 'CompanyInseeCode'),
+			'company_capital' => array($companyCapital, 'CompanyCapital'),
+			'company_legal_form' => array($companyLegalForm, 'CompanyLegalForm'),
+			'company_nace_sector' => array($companyNaceSector, 'CompanyNaceSector'),
+			'representative_lastname' => array($representativeLastname, 'RepresentativeLastname'),
+			'representative_firstname' => array($representativeFirstname, 'RepresentativeFirstname'),
+			'representative_authorized' => array($representativeAuthorized, 'RepresentativeAuthorized'),
+			'signataire_fonction' => array($signataireFonction, 'SignerFunction'),
+			'signataire_email' => array($signataireEmail, 'SignerEmail'),
+			'client_phone' => array($clientPhone, 'Phone'),
+			'headquarters_address' => array($headquartersAddress, 'HeadquartersAddress'),
+			'headquarters_zip' => array($headquartersZip, 'HeadquartersZip'),
+			'headquarters_town' => array($headquartersTown, 'HeadquartersTown'),
+			'producer_is_building_owner' => array($producerIsBuildingOwner, 'ProducerIsBuildingOwner'),
+			'building_already_built' => array($buildingAlreadyBuilt, 'BuildingAlreadyBuilt'),
+			'site_name' => array($siteName, 'SiteName'),
+			'production_site_siret' => array($productionSiteSiret, 'ProductionSiteSiret'),
+			'site_address' => array($siteAddress, 'Address'),
+			'site_zip' => array($siteZip, 'Zip'),
+			'site_town' => array($siteTown, 'Town'),
+			'site_already_connected' => array($siteAlreadyConnected, 'SiteAlreadyConnected'),
+			'type_exploitation' => array($typeExploitation, 'ExploitationType'),
+			'no_related_project_attestation' => array($noRelatedProjectAttestation, 'NoRelatedProjectAttestation'),
+			'enedis_request_type' => array($enedisRequestType, 'EnedisRequestType'),
+		);
+		if ($producerIsBuildingOwner === 'no') {
+			$requiredCompanyFields['building_owner_name'] = array($buildingOwnerName, 'BuildingOwnerName');
+		}
+		if ($siteAlreadyConnected === 'yes') {
+			$requiredCompanyFields['existing_connection_type'] = array($existingConnectionType, 'ExistingConnectionType');
+			$requiredCompanyFields['pdl_choice'] = array($pdlChoice, 'PdlChoice');
+		}
+		if ($siteAlreadyConnected === 'yes' && $pdlChoice === 'existing_same_legal_entity') {
+			$requiredCompanyFields['puissance_souscrite'] = array($puissanceSouscrite, 'SubscribedPower');
+			$requiredCompanyFields['prm'] = array($prm, 'PRM');
+			$requiredCompanyFields['pdl_contract_holder'] = array($pdlContractHolder, 'PdlContractHolder');
+		}
+		if ($noRelatedProjectAttestation === 'no') {
+			$requiredCompanyFields['related_project_references'] = array($relatedProjectReferences, 'RelatedProjectReferences');
+		}
+		foreach ($requiredCompanyFields as $requiredCompanyField) {
+			if (trim((string) $requiredCompanyField[0]) === '') {
+				$uploadErrors[] = $langs->trans('PublicRequiredFieldMissing', $langs->trans($requiredCompanyField[1]));
+			}
+		}
+		if ($representativeAuthorized !== 'yes') {
+			$uploadErrors[] = $langs->trans('RepresentativeAuthorizationRequired');
+		}
+		if ($productionSiteSiret !== '' && !preg_match('/^\d{14}$/', $productionSiteSiret)) {
+			$uploadErrors[] = $langs->trans('ProductionSiteSiretInvalid');
+		}
 	}
 	if ($clientSiret !== '' && !preg_match('/^\d{14}$/', $clientSiret)) {
 		$uploadErrors[] = $langs->trans('BeneficiarySiretInvalid');
@@ -706,6 +949,12 @@ body.page-public-collecte div.fiche {
 	line-height: 1.3;
 	color: #172033;
 }
+.public-subtitle {
+	margin: 12px 0 4px;
+	font-size: 0.92rem;
+	font-weight: 800;
+	color: #172033;
+}
 .public-form-table {
 	width: 100%;
 	border-collapse: separate;
@@ -923,55 +1172,111 @@ foreach (array('particulier' => 'ClientTypeIndividual', 'societe' => 'ClientType
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formClientType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('client_type').'</td></tr>';
-print '<tr><td>'.$langs->trans('NameOrCompany').'</td><td><input type="text" class="flat minwidth300" name="client_name" autocomplete="organization" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
-print '<tr id="client-siret-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}"'.($formClientType === 'societe' ? ' required' : '').' value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('NameOrCompany').'</td><td><input type="text" class="flat minwidth300" name="client_name" autocomplete="organization" data-company-required="1" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
+print '<tr class="public-company-row" id="client-siret-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-company-required="1"'.($formClientType === 'societe' ? ' required' : '').' value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" autocomplete="email" value="'.dol_escape_htmltag($formClientEmail).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" data-company-required="1" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td colspan="2"><div class="public-subtitle">'.$langs->trans('BeneficiaryCompanyDetails').'</div></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyInseeCode').'</td><td><input type="text" class="flat minwidth200" name="company_insee_code" data-company-required="1" value="'.dol_escape_htmltag($formCompanyInseeCode).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyCapital').'</td><td><span class="public-unit-field"><input type="text" class="flat width150 right" name="company_capital" data-company-required="1" value="'.dol_escape_htmltag($formCompanyCapital).'"><span class="opacitymedium">EUR</span></span></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyLegalForm').'</td><td><input type="text" class="flat minwidth300" name="company_legal_form" data-company-required="1" value="'.dol_escape_htmltag($formCompanyLegalForm).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanySize').'</td><td><select class="flat minwidth300" name="company_size" id="company_size" data-company-required="1">';
+foreach (array('pme' => 'CompanySizePME', 'eti' => 'CompanySizeETI', 'ge' => 'CompanySizeGE') as $value => $labelKey) {
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formCompanySize === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+}
+print '</select>'.ajax_combobox('company_size').'</td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyNaceSector').'</td><td><input type="text" class="flat minwidth500" name="company_nace_sector" data-company-required="1" value="'.dol_escape_htmltag($formCompanyNaceSector).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td colspan="2"><div class="public-subtitle">'.$langs->trans('CompanyRepresentativeDetails').'</div></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeLastname').'</td><td><input type="text" class="flat minwidth300" name="representative_lastname" id="representative_lastname" autocomplete="family-name" data-company-required="1" value="'.dol_escape_htmltag($formRepresentativeLastname).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeFirstname').'</td><td><input type="text" class="flat minwidth300" name="representative_firstname" id="representative_firstname" autocomplete="given-name" data-company-required="1" value="'.dol_escape_htmltag($formRepresentativeFirstname).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeMobile').'</td><td><input type="text" class="flat minwidth200" name="representative_mobile" autocomplete="tel" value="'.dol_escape_htmltag($formRepresentativeMobile).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeAuthorized').'</td><td><select class="flat minwidth300" name="representative_authorized" id="representative_authorized" data-company-required="1"><option value="yes"'.($formRepresentativeAuthorized === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formRepresentativeAuthorized === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('representative_authorized').'<span class="public-help">'.$langs->trans('RepresentativeAuthorizedHelp').'</span></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersAddress').'</td><td><input type="text" class="flat minwidth500" name="headquarters_address" autocomplete="street-address" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersAddress).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersZip').'</td><td><input type="text" class="flat maxwidth100" name="headquarters_zip" autocomplete="postal-code" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersZip).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersTown').'</td><td><input type="text" class="flat minwidth300" name="headquarters_town" autocomplete="address-level2" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersTown).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProducerIsBuildingOwner').'</td><td><select class="flat minwidth150" name="producer_is_building_owner" id="producer_is_building_owner" data-company-required="1"><option value="yes"'.($formProducerIsBuildingOwner === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formProducerIsBuildingOwner === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('producer_is_building_owner').'</td></tr>';
+print '<tr class="public-company-row public-building-owner-row"'.($formClientType === 'societe' && $formProducerIsBuildingOwner === 'no' ? '' : ' hidden').'><td>'.$langs->trans('BuildingOwnerName').'</td><td><input type="text" class="flat minwidth300" name="building_owner_name" id="building_owner_name" value="'.dol_escape_htmltag($formBuildingOwnerName).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BuildingAlreadyBuilt').'</td><td><select class="flat minwidth150" name="building_already_built" id="building_already_built" data-company-required="1"><option value="yes"'.($formBuildingAlreadyBuilt === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formBuildingAlreadyBuilt === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('building_already_built').'</td></tr>';
 print '</table>';
 print '</section>';
 
 print '<section class="public-section" id="public-section-site">';
 print '<div class="public-section-header"><span class="public-step">2</span><h2>'.$langs->trans('PublicSectionSite').'</h2></div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" value="'.dol_escape_htmltag($formSiteName).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" value="'.dol_escape_htmltag($formSiteAddress).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="site_town" autocomplete="address-level2" value="'.dol_escape_htmltag($formSiteTown).'"></td></tr>';
+print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" data-company-required="1" value="'.dol_escape_htmltag($formSiteName).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProductionSiteSiret').'</td><td><input type="text" class="flat minwidth200" name="production_site_siret" id="production_site_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-company-required="1" value="'.dol_escape_htmltag($formProductionSiteSiret).'"><span class="public-help">'.$langs->trans('ProductionSiteSiretHelp').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" data-company-required="1" value="'.dol_escape_htmltag($formSiteAddress).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" data-company-required="1" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="site_town" autocomplete="address-level2" data-company-required="1" value="'.dol_escape_htmltag($formSiteTown).'"></td></tr>';
 print '<tr><td>'.$langs->trans('PRM').'</td><td><input type="text" class="flat minwidth200" name="prm" value="'.dol_escape_htmltag($formPrm).'"></td></tr>';
 print '<tr><td>'.$langs->trans('NetworkType').'</td><td><select class="flat minwidth200" name="type_reseau" id="type_reseau">';
 foreach (array('monophase' => 'NetworkMonophase', 'triphase' => 'NetworkTriphase', 'unknown' => 'Unknown') as $value => $labelKey) {
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formTypeReseau === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_reseau').'</td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td colspan="2"><div class="public-subtitle">'.$langs->trans('ExistingGridConnectionDetails').'</div></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('SiteAlreadyConnected').'</td><td><select class="flat minwidth150" name="site_already_connected" id="site_already_connected" data-company-required="1"><option value="yes"'.($formSiteAlreadyConnected === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formSiteAlreadyConnected === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('site_already_connected').'</td></tr>';
+print '<tr class="public-company-row public-existing-connection-row"'.($formClientType === 'societe' && $formSiteAlreadyConnected === 'yes' ? '' : ' hidden').'><td>'.$langs->trans('ExistingConnectionType').'</td><td><select class="flat minwidth300" name="existing_connection_type" id="existing_connection_type" data-company-required="1">';
+foreach (array('bt_soutirage' => 'ExistingConnectionBTSoutirage', 'hta_soutirage' => 'ExistingConnectionHTASoutirage', 'bt_injection' => 'ExistingConnectionBTInjection', 'hta_injection' => 'ExistingConnectionHTAInjection') as $value => $labelKey) {
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formExistingConnectionType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+}
+print '</select>'.ajax_combobox('existing_connection_type').'</td></tr>';
+print '<tr class="public-company-row public-existing-connection-row"'.($formClientType === 'societe' && $formSiteAlreadyConnected === 'yes' ? '' : ' hidden').'><td>'.$langs->trans('PdlChoice').'</td><td><select class="flat minwidth500" name="pdl_choice" id="pdl_choice" data-company-required="1">';
+foreach (array('new_pdl' => 'PdlChoiceNew', 'existing_same_legal_entity' => 'PdlChoiceExistingSameLegalEntity', 'existing_other_legal_entity' => 'PdlChoiceExistingOtherLegalEntity') as $value => $labelKey) {
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formPdlChoice === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+}
+print '</select>'.ajax_combobox('pdl_choice').'</td></tr>';
+print '<tr class="public-company-row public-existing-pdl-detail-row"'.($formClientType === 'societe' && $formSiteAlreadyConnected === 'yes' && $formPdlChoice === 'existing_same_legal_entity' ? '' : ' hidden').'><td>'.$langs->trans('SubscribedPower').'</td><td><span class="public-unit-field"><input type="text" class="flat width150 right" name="puissance_souscrite" data-company-required="1" value="'.dol_escape_htmltag($formPuissanceSouscrite).'"><span class="opacitymedium">kVA</span></span></td></tr>';
+print '<tr class="public-company-row public-existing-pdl-detail-row"'.($formClientType === 'societe' && $formSiteAlreadyConnected === 'yes' && $formPdlChoice === 'existing_same_legal_entity' ? '' : ' hidden').'><td>'.$langs->trans('PdlContractHolder').'</td><td><input type="text" class="flat minwidth300" name="pdl_contract_holder" data-company-required="1" value="'.dol_escape_htmltag($formPdlContractHolder).'"></td></tr>';
 print '</table>';
 print '</section>';
 
 print '<section class="public-section" id="public-section-project">';
 print '<div class="public-section-header"><span class="public-step">3</span><h2>'.$langs->trans('PublicSectionProject').'</h2></div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('ExploitationType').'</td><td><select class="flat minwidth300" name="type_exploitation" id="type_exploitation">';
+print '<tr><td class="titlefield">'.$langs->trans('ExploitationType').'</td><td><select class="flat minwidth300" name="type_exploitation" id="type_exploitation" data-company-required="1">';
 foreach (array('autoconsommation_totale' => 'ExploitationAutoconsommationTotale', 'autoconsommation_surplus' => 'ExploitationAutoconsommationSurplus', 'injection_totale' => 'ExploitationInjectionTotale', 'autoconsommation_collective' => 'ExploitationAutoconsommationCollective') as $value => $labelKey) {
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formTypeExploitation === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_exploitation').'</td></tr>';
 print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag($formPuissanceInstallee).'"><span class="opacitymedium">kWc</span></span></td></tr>';
 print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag($formPuissanceInjection).'"><span class="opacitymedium">kVA</span></span></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('NoRelatedProjectAttestation').'</td><td><select class="flat minwidth300" name="no_related_project_attestation" id="no_related_project_attestation" data-company-required="1"><option value="yes"'.($formNoRelatedProjectAttestation === 'yes' ? ' selected' : '').'>'.$langs->trans('NoRelatedProjectYes').'</option><option value="no"'.($formNoRelatedProjectAttestation === 'no' ? ' selected' : '').'>'.$langs->trans('NoRelatedProjectNo').'</option></select>'.ajax_combobox('no_related_project_attestation').'<span class="public-help">'.$langs->trans('NoRelatedProjectAttestationHelp').'</span></td></tr>';
+print '<tr class="public-company-row public-related-project-row"'.($formClientType === 'societe' && $formNoRelatedProjectAttestation === 'no' ? '' : ' hidden').'><td>'.$langs->trans('RelatedProjectReferences').'</td><td><input type="text" class="flat minwidth500" name="related_project_references" data-company-required="1" value="'.dol_escape_htmltag($formRelatedProjectReferences).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('EnedisRequestType').'</td><td><select class="flat minwidth500" name="enedis_request_type" id="enedis_request_type" data-company-required="1">';
+foreach (array('enedis_full' => 'EnedisRequestTypeFullEnedis', 'l342_2' => 'EnedisRequestTypeL3422', 'prac' => 'EnedisRequestTypePrac') as $value => $labelKey) {
+	print '<option value="'.dol_escape_htmltag($value).'"'.($formEnedisRequestType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+}
+print '</select>'.ajax_combobox('enedis_request_type').'</td></tr>';
 print '</table>';
 print '</section>';
 
 print '<section class="public-section" id="public-section-pieces">';
 print '<div class="public-section-header"><span class="public-step">4</span><h2>'.$langs->trans('PublicSectionPieces').'</h2></div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('PieceFactureElectricite').'</td><td><input type="file" class="flat" name="piece_facture_electricite"><span class="public-help">'.$langs->trans('PublicElectricityBillHelp').'</span></td></tr>';
+foreach (procedurespvPublicGetPieceDefinitions($formClientType, $formPdlChoice, $formSiteAlreadyConnected) as $pieceDefinition) {
+	$rowClasses = array();
+	if ((int) $pieceDefinition['company_only']) {
+		$rowClasses[] = 'public-company-row';
+	}
+	if ((int) $pieceDefinition['pdl_other_only']) {
+		$rowClasses[] = 'public-pdl-other-piece-row';
+	}
+	$rowClass = !empty($rowClasses) ? ' class="'.implode(' ', $rowClasses).'"' : '';
+	$rowHidden = ((int) $pieceDefinition['company_only'] && $formClientType !== 'societe') || ((int) $pieceDefinition['pdl_other_only'] && ($formSiteAlreadyConnected !== 'yes' || $formPdlChoice !== 'existing_other_legal_entity')) ? ' hidden' : '';
+	$requiredAttribute = (int) $pieceDefinition['required'] ? ' required' : '';
+	$companyRequiredAttribute = (int) $pieceDefinition['company_only'] ? ' data-company-required="1"' : '';
+	print '<tr'.$rowClass.$rowHidden.'><td class="titlefield">'.$langs->trans($pieceDefinition['label']).'</td><td><input type="file" class="flat" name="'.dol_escape_htmltag($pieceDefinition['input']).'" accept=".pdf,.jpg,.jpeg,.png"'.$requiredAttribute.$companyRequiredAttribute.'><span class="public-help">'.$langs->trans($pieceDefinition['help']).'</span></td></tr>';
+}
 print '</table>';
 print '</section>';
 
 print '<section class="public-section" id="public-section-mandat">';
 print '<div class="public-section-header"><span class="public-step">5</span><h2>'.$langs->trans('PublicSectionMandat').'</h2></div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" autocomplete="name" value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerFunction').'</td><td><input type="text" class="flat minwidth300" name="signataire_fonction" value="'.dol_escape_htmltag($formSignataireFonction).'"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerEmail').'</td><td><input type="email" class="flat minwidth300" name="signataire_email" autocomplete="email" value="'.dol_escape_htmltag($formSignataireEmail).'"></td></tr>';
+print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" id="signataire_nom" autocomplete="name" value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
+print '<tr><td>'.$langs->trans('SignerFunction').'</td><td><input type="text" class="flat minwidth300" name="signataire_fonction" id="signataire_fonction" data-company-required="1" value="'.dol_escape_htmltag($formSignataireFonction).'"></td></tr>';
+print '<tr><td>'.$langs->trans('SignerEmail').'</td><td><input type="email" class="flat minwidth300" name="signataire_email" id="signataire_email" autocomplete="email" data-company-required="1" value="'.dol_escape_htmltag($formSignataireEmail).'"></td></tr>';
 print '<tr><td>'.$langs->trans('MandatAcceptance').'</td><td><select class="flat minwidth300" name="mandat_acceptance" id="mandat_acceptance"><option value="no"'.($formMandatAcceptance === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option><option value="yes"'.($formMandatAcceptance === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option></select>'.ajax_combobox('mandat_acceptance').'</td></tr>';
 print '<tr><td>'.$langs->trans('Signature').'</td><td>';
 print '<canvas class="public-signature-pad" id="mandat-signature-pad" width="620" height="190"></canvas>';
@@ -985,29 +1290,68 @@ print '</section>';
 print '<script>
 (function () {
 	var clientType = document.getElementById("client_type");
-	var siretRow = document.getElementById("client-siret-row");
 	var siretInput = document.getElementById("client_siret");
+	var productionSiretInput = document.getElementById("production_site_siret");
+	var representativeLastname = document.getElementById("representative_lastname");
+	var representativeFirstname = document.getElementById("representative_firstname");
+	var signerName = document.getElementById("signataire_nom");
+	var producerIsBuildingOwner = document.getElementById("producer_is_building_owner");
+	var siteAlreadyConnected = document.getElementById("site_already_connected");
+	var pdlChoice = document.getElementById("pdl_choice");
+	var noRelatedProjectAttestation = document.getElementById("no_related_project_attestation");
 	var canvas = document.getElementById("mandat-signature-pad");
 	var hidden = document.getElementById("signature_data_url");
 	var clearButton = document.getElementById("clear-signature");
-	function refreshSiret() {
-		if (!clientType || !siretRow || !siretInput) return;
-		var required = clientType.value === "societe";
-		siretRow.hidden = !required;
-		siretInput.required = required;
-		if (!required) {
-			siretInput.value = "";
-		}
-	}
-	if (clientType) {
-		clientType.addEventListener("change", refreshSiret);
-		refreshSiret();
-	}
-	if (siretInput) {
-		siretInput.addEventListener("input", function () {
-			this.value = this.value.replace(/\\D/g, "").slice(0, 14);
+	function setRowsHidden(selector, hiddenState) {
+		document.querySelectorAll(selector).forEach(function (row) {
+			row.hidden = hiddenState;
 		});
 	}
+	function syncSignerName() {
+		if (!clientType || clientType.value !== "societe" || !signerName || signerName.dataset.userEdited === "1") return;
+		var fullname = "";
+		if (representativeFirstname && representativeFirstname.value) fullname += representativeFirstname.value.trim();
+		if (representativeLastname && representativeLastname.value) fullname += (fullname ? " " : "") + representativeLastname.value.trim();
+		if (fullname) signerName.value = fullname;
+	}
+	function refreshPublicForm() {
+		if (!clientType) return;
+		var isCompany = clientType.value === "societe";
+		setRowsHidden(".public-company-row", !isCompany);
+		setRowsHidden(".public-building-owner-row", !(isCompany && producerIsBuildingOwner && producerIsBuildingOwner.value === "no"));
+		setRowsHidden(".public-existing-connection-row", !(isCompany && siteAlreadyConnected && siteAlreadyConnected.value === "yes"));
+		setRowsHidden(".public-existing-pdl-detail-row", !(isCompany && siteAlreadyConnected && siteAlreadyConnected.value === "yes" && pdlChoice && pdlChoice.value === "existing_same_legal_entity"));
+		setRowsHidden(".public-pdl-other-piece-row", !(isCompany && siteAlreadyConnected && siteAlreadyConnected.value === "yes" && pdlChoice && pdlChoice.value === "existing_other_legal_entity"));
+		setRowsHidden(".public-related-project-row", !(isCompany && noRelatedProjectAttestation && noRelatedProjectAttestation.value === "no"));
+		document.querySelectorAll("[data-company-required]").forEach(function (field) {
+			var row = field.closest("tr");
+			field.required = isCompany && (!row || !row.hidden);
+		});
+		if (!isCompany && siretInput) {
+			siretInput.value = "";
+		}
+		syncSignerName();
+	}
+	[clientType, producerIsBuildingOwner, siteAlreadyConnected, pdlChoice, noRelatedProjectAttestation].forEach(function (field) {
+		if (field) field.addEventListener("change", refreshPublicForm);
+	});
+	[representativeLastname, representativeFirstname].forEach(function (field) {
+		if (field) field.addEventListener("input", function () {
+			syncSignerName();
+		});
+	});
+	if (signerName) {
+		signerName.addEventListener("input", function () {
+			signerName.dataset.userEdited = "1";
+		});
+	}
+	[siretInput, productionSiretInput].forEach(function (field) {
+		if (!field) return;
+		field.addEventListener("input", function () {
+			this.value = this.value.replace(/\\D/g, "").slice(0, 14);
+		});
+	});
+	refreshPublicForm();
 	if (!canvas || !hidden) return;
 	var ctx = canvas.getContext("2d");
 	var drawing = false;

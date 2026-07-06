@@ -22,3 +22,5 @@
 - Ajout de trois modèles de courriels natifs par défaut pour la collecte client et les relances.
 - Ajout du logo d’entité, des mentions légales et d’une navigation par ancres dans la page publique de collecte.
 - Génération d’un mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, téléchargement public du mandat signé et tampon entreprise configurable.
+- Extension de la collecte publique entreprise selon la fiche DDR ENEDIS : informations société, représentant, raccordement existant et pièces K-Bis/autorisation administrative/CARD conditionnelle.
+- Raccourcissement des types de modèles de courriels natifs pour respecter la taille de colonne Dolibarr `c_email_templates.type_template`.

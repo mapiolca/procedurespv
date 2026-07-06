@@ -303,12 +303,46 @@ class modProceduresPV extends DolibarrModules
 			}
 		}
 
+		$resultEmailTemplateMigration = $this->migrateLegacyEmailTemplateTypes();
+		if ($resultEmailTemplateMigration < 0) {
+			return $resultEmailTemplateMigration;
+		}
+
 		$resultEmailTemplates = $this->registerDefaultEmailTemplates($missingEmailTemplateConsts);
 		if ($resultEmailTemplates < 0) {
 			return $resultEmailTemplates;
 		}
 
 		return $this->_init($sql, $options);
+	}
+
+	/**
+	 * Migrate legacy email template types that exceeded the native Dolibarr column length.
+	 *
+	 * @return int
+	 */
+	private function migrateLegacyEmailTemplateTypes()
+	{
+		$legacyTypes = array(
+			'procedurespv_raccordement_collecte' => ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_COLLECTE,
+			'procedurespv_raccordement_relance_collecte' => ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_RELANCE_COLLECTE,
+			'procedurespv_raccordement_relance_mandat' => ActionsProceduresPV::EMAIL_TEMPLATE_TYPE_RELANCE_MANDAT,
+		);
+
+		foreach ($legacyTypes as $oldType => $newType) {
+			$sql = 'UPDATE '.MAIN_DB_PREFIX.'c_email_templates';
+			$sql .= " SET type_template = '".$this->db->escape($newType)."'";
+			$sql .= " WHERE module = 'procedurespv'";
+			$sql .= " AND type_template = '".$this->db->escape($oldType)."'";
+
+			$resql = $this->db->query($sql);
+			if (!$resql) {
+				$this->error = $this->db->lasterror();
+				return -2;
+			}
+		}
+
+		return 1;
 	}
 
 	/**
