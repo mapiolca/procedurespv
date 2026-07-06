@@ -1332,9 +1332,14 @@ print '<script>
 		}
 		syncSignerName();
 	}
-	[clientType, producerIsBuildingOwner, siteAlreadyConnected, pdlChoice, noRelatedProjectAttestation].forEach(function (field) {
-		if (field) field.addEventListener("change", refreshPublicForm);
-	});
+	function bindDynamicSelect(field) {
+		if (!field) return;
+		field.addEventListener("change", refreshPublicForm);
+		if (window.jQuery) {
+			window.jQuery(field).on("change select2:select select2:clear select2:unselect", refreshPublicForm);
+		}
+	}
+	[clientType, producerIsBuildingOwner, siteAlreadyConnected, pdlChoice, noRelatedProjectAttestation].forEach(bindDynamicSelect);
 	[representativeLastname, representativeFirstname].forEach(function (field) {
 		if (field) field.addEventListener("input", function () {
 			syncSignerName();
