@@ -816,6 +816,7 @@ body.page-public-collecte div.fiche {
 	margin-right: 0 !important;
 }
 .public-procedurespv {
+	--public-steps-height: 60px;
 	box-sizing: border-box;
 	display: flex;
 	justify-content: center;
@@ -891,9 +892,19 @@ body.page-public-collecte div.fiche {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 8px;
+	position: sticky;
+	top: 0;
+	z-index: 10;
 	margin: 0 0 22px;
-	padding: 0;
+	padding: 10px 0;
 	list-style: none;
+	background: #eef6f2;
+	border-bottom: 1px solid transparent;
+	transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.public-steps.is-stuck {
+	border-bottom-color: #d7e3df;
+	box-shadow: 0 10px 24px rgba(16, 24, 40, 0.08);
 }
 .public-steps li {
 	margin: 0;
@@ -917,8 +928,18 @@ body.page-public-collecte div.fiche {
 	box-shadow: 0 8px 18px rgba(16, 24, 40, 0.08);
 	outline: none;
 }
+.public-steps a.is-active {
+	border-color: #0f766e;
+	background: #0f766e;
+	color: #fff;
+	box-shadow: 0 8px 18px rgba(15, 118, 110, 0.22);
+}
+.public-steps a.is-active:hover,
+.public-steps a.is-active:focus {
+	color: #fff;
+}
 .public-section {
-	scroll-margin-top: 18px;
+	scroll-margin-top: calc(var(--public-steps-height, 60px) + 18px);
 	margin: 16px 0;
 	padding: clamp(16px, 2.2vw, 24px);
 	border: 1px solid #dce7e3;
@@ -1096,6 +1117,14 @@ body.page-public-collecte div.fiche {
 	.public-unit-field {
 		width: 100%;
 	}
+	.public-steps {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		padding-bottom: 12px;
+	}
+	.public-steps li {
+		flex: 0 0 auto;
+	}
 	.public-actions {
 		text-align: center;
 	}
@@ -1151,8 +1180,8 @@ if (!$linkUsable) {
 	exit;
 }
 
-print '<ul class="public-steps">';
-print '<li><a href="#public-section-client">01 '.$langs->trans('PublicSectionClient').'</a></li>';
+print '<ul class="public-steps" aria-label="'.$langs->trans('PublicCollecteTitle').'">';
+print '<li><a class="is-active" aria-current="step" href="#public-section-client">01 '.$langs->trans('PublicSectionClient').'</a></li>';
 print '<li><a href="#public-section-site">02 '.$langs->trans('PublicSectionSite').'</a></li>';
 print '<li><a href="#public-section-project">03 '.$langs->trans('PublicSectionProject').'</a></li>';
 print '<li><a href="#public-section-pieces">04 '.$langs->trans('PublicSectionPieces').'</a></li>';
@@ -1357,6 +1386,52 @@ print '<script>
 		});
 	});
 	refreshPublicForm();
+	var stepsNav = document.querySelector(".public-steps");
+	var stepLinks = stepsNav ? Array.prototype.slice.call(stepsNav.querySelectorAll("a[href^=\"#public-section-\"]")) : [];
+	var stepSections = stepLinks.map(function (link) {
+		var sectionId = link.getAttribute("href");
+		return sectionId ? document.querySelector(sectionId) : null;
+	});
+	var stepsCssTarget = stepsNav ? stepsNav.closest(".public-procedurespv") : null;
+	function setActiveStep(activeIndex) {
+		stepLinks.forEach(function (link, index) {
+			if (index === activeIndex) {
+				link.classList.add("is-active");
+				link.setAttribute("aria-current", "step");
+			} else {
+				link.classList.remove("is-active");
+				link.removeAttribute("aria-current");
+			}
+		});
+	}
+	function refreshStepsMetrics() {
+		if (!stepsNav) return;
+		(stepsCssTarget || document.documentElement).style.setProperty("--public-steps-height", stepsNav.offsetHeight + "px");
+	}
+	function refreshActiveStep() {
+		if (!stepsNav || stepSections.length === 0) return;
+		var readingLine = stepsNav.getBoundingClientRect().bottom + 18;
+		var activeIndex = 0;
+		stepSections.forEach(function (section, index) {
+			if (section && section.getBoundingClientRect().top <= readingLine) {
+				activeIndex = index;
+			}
+		});
+		stepsNav.classList.toggle("is-stuck", stepsNav.getBoundingClientRect().top <= 0 && window.pageYOffset > 0);
+		setActiveStep(activeIndex);
+	}
+	function refreshStepsState() {
+		refreshStepsMetrics();
+		refreshActiveStep();
+	}
+	refreshStepsState();
+	stepLinks.forEach(function (link) {
+		link.addEventListener("click", function () {
+			window.setTimeout(refreshStepsState, 0);
+		});
+	});
+	window.addEventListener("scroll", refreshActiveStep, {passive:true});
+	window.addEventListener("resize", refreshStepsState);
 	if (!canvas || !hidden) return;
 	var ctx = canvas.getContext("2d");
 	var drawing = false;

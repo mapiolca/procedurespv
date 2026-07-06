@@ -24,4 +24,6 @@
 - Génération d’un mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, téléchargement public du mandat signé et tampon entreprise configurable.
 - Extension de la collecte publique entreprise selon la fiche DDR ENEDIS : informations société, représentant, raccordement existant et pièces K-Bis/autorisation administrative/CARD conditionnelle.
 - Correction de l’affichage dynamique des champs société dans le formulaire public de collecte, sans rechargement ni nouvel accès comptabilisé.
+- Ajout d’un bandeau d’étapes sticky avec pilule active selon la section visible dans le formulaire public de collecte.
+- Ajout des traductions manquantes des champs d’adresse du site de production dans le formulaire public.
 - Raccourcissement des types de modèles de courriels natifs pour respecter la taille de colonne Dolibarr `c_email_templates.type_template`.
