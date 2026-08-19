@@ -647,22 +647,65 @@ if ($action === 'create' || $action === 'edit') {
 	print '<td>'.$langs->trans('Responsible').'</td>';
 	print '</tr>';
 
+	/** @var list<array{step: string, status_label: string, status_type: string, last_action: string, next_action: string, responsible: string}> $trackingRows */
 	$trackingRows = array(
-		array('CollecteClient', $object->status >= 4 ? 'RaccordementStatusCollecteSubmitted' : ($object->status >= 2 ? 'RaccordementStatusCollecteSent' : 'RaccordementStatusCollecteToSend'), 'CollecteSentDate', $object->getNextAction(), 'ResponsibleInternal'),
-		array('MandatEnedis', $object->date_mandat_validation ? 'SignatureStatusValidated' : ($object->date_mandat_signature ? 'SignatureStatusToControl' : 'SignatureStatusWaiting'), 'MandatSignatureDate', 'NextActionInternalControl', 'ResponsibleInternal'),
-		array('DemandeRaccordement', $object->status >= 8 ? 'RaccordementStatusDepositedEnedis' : 'RequestStatusToComplete', 'EnedisDepositDate', 'NextActionPrepareEnedisDeposit', 'ResponsibleInternal'),
-		array('CARDi', 'CardiStatusToDetermine', 'Dash', 'Dash', 'Dash'),
-		array('ConventionContrat', $object->status >= 12 ? 'RaccordementStatusConventionSigned' : 'ConventionStatusNotReceived', 'Dash', 'NextActionSendConvention', 'Enedis'),
-		array('MiseEnService', $object->status >= 15 ? 'RaccordementStatusMesDone' : 'MESStatusNotRequested', 'Dash', 'NextActionPrepareMES', 'ResponsibleInternal'),
+		array(
+			'step' => 'CollecteClient',
+			'status_label' => $object->status >= 4 ? 'RaccordementStatusCollecteSubmitted' : ($object->status >= 2 ? 'RaccordementStatusCollecteSent' : 'RaccordementStatusCollecteToSend'),
+			'status_type' => $object->status >= 4 ? 'status5' : ($object->status >= 2 ? 'status1' : 'status0'),
+			'last_action' => 'CollecteSentDate',
+			'next_action' => $object->getNextAction(),
+			'responsible' => 'ResponsibleInternal',
+		),
+		array(
+			'step' => 'MandatEnedis',
+			'status_label' => $object->date_mandat_validation ? 'SignatureStatusValidated' : ($object->date_mandat_signature ? 'SignatureStatusToControl' : 'SignatureStatusWaiting'),
+			'status_type' => $object->date_mandat_validation ? 'status5' : ($object->date_mandat_signature ? 'status4' : 'status1'),
+			'last_action' => 'MandatSignatureDate',
+			'next_action' => 'NextActionInternalControl',
+			'responsible' => 'ResponsibleInternal',
+		),
+		array(
+			'step' => 'DemandeRaccordement',
+			'status_label' => $object->status >= 8 ? 'RaccordementStatusDepositedEnedis' : 'RequestStatusToComplete',
+			'status_type' => $object->status >= 8 ? 'status5' : 'status4',
+			'last_action' => 'EnedisDepositDate',
+			'next_action' => 'NextActionPrepareEnedisDeposit',
+			'responsible' => 'ResponsibleInternal',
+		),
+		array(
+			'step' => 'CARDi',
+			'status_label' => 'CardiStatusToDetermine',
+			'status_type' => 'status0',
+			'last_action' => 'Dash',
+			'next_action' => 'Dash',
+			'responsible' => 'Dash',
+		),
+		array(
+			'step' => 'ConventionContrat',
+			'status_label' => $object->status >= 12 ? 'RaccordementStatusConventionSigned' : 'ConventionStatusNotReceived',
+			'status_type' => $object->status >= 12 ? 'status5' : 'status0',
+			'last_action' => 'Dash',
+			'next_action' => 'NextActionSendConvention',
+			'responsible' => 'Enedis',
+		),
+		array(
+			'step' => 'MiseEnService',
+			'status_label' => $object->status >= 15 ? 'RaccordementStatusMesDone' : 'MESStatusNotRequested',
+			'status_type' => $object->status >= 15 ? 'status5' : 'status0',
+			'last_action' => 'Dash',
+			'next_action' => 'NextActionPrepareMES',
+			'responsible' => 'ResponsibleInternal',
+		),
 	);
 
 	foreach ($trackingRows as $trackingRow) {
 		print '<tr class="oddeven">';
-		print '<td>'.$langs->trans($trackingRow[0]).'</td>';
-		print '<td class="center"><span class="badge">'.$langs->trans($trackingRow[1]).'</span></td>';
-		print '<td>'.$langs->trans($trackingRow[2]).'</td>';
-		print '<td>'.$langs->trans($trackingRow[3]).'</td>';
-		print '<td>'.$langs->trans($trackingRow[4]).'</td>';
+		print '<td>'.$langs->trans($trackingRow['step']).'</td>';
+		print '<td class="center">'.dolGetStatus($langs->trans($trackingRow['status_label']), '', '', $trackingRow['status_type'], 6).'</td>';
+		print '<td>'.$langs->trans($trackingRow['last_action']).'</td>';
+		print '<td>'.$langs->trans($trackingRow['next_action']).'</td>';
+		print '<td>'.$langs->trans($trackingRow['responsible']).'</td>';
 		print '</tr>';
 	}
 	print '</table>';
