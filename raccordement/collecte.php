@@ -142,7 +142,6 @@ dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 print '<div class="fichecenter">';
 print '<div class="fichehalfleft">';
 print '<table class="border centpercent">';
-print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td>'.$object->getLibStatut(5).'</td></tr>';
 print '<tr><td>'.$langs->trans('CollecteSentDate').'</td><td>'.(!empty($object->date_collecte_envoi) ? dol_print_date((int) $object->date_collecte_envoi, 'dayhour') : '').'</td></tr>';
 print '<tr><td>'.$langs->trans('CollecteOpenedDate').'</td><td>'.(!empty($object->date_collecte_ouverture) ? dol_print_date((int) $object->date_collecte_ouverture, 'dayhour') : '').'</td></tr>';
 print '<tr><td>'.$langs->trans('CollecteSubmittedDate').'</td><td>'.(!empty($object->date_collecte_soumission) ? dol_print_date((int) $object->date_collecte_soumission, 'dayhour') : '').'</td></tr>';
