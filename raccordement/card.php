@@ -32,6 +32,7 @@ $object = new Raccordement($db);
 $form = new Form($db);
 $formproject = new FormProjets($db);
 $centralePVAdapter = new CentralePVAdapter($db);
+$hookmanager->initHooks(array('raccordementcard', 'globalcard'));
 
 $permissiontoread = procedurespvCanDo($user, 'raccordement', 'read');
 $permissiontoadd = procedurespvCanDo($user, 'raccordement', 'write');
@@ -70,6 +71,12 @@ $sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_sn
 
 if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
+}
+
+$parameters = array('id' => (int) $object->id);
+$reshook = $hookmanager->executeHooks('doActions', $parameters, $object, $action);
+if ($reshook < 0) {
+	setEventMessages($hookmanager->error, $hookmanager->errors, 'errors');
 }
 
 /**

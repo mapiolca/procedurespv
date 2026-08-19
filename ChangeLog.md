@@ -30,3 +30,6 @@
 - Refonte native de la liste des raccordements : défilement horizontal interne, choix des colonnes, filtres alignés sur les préférences utilisateur et massaction de suppression.
 - Affichage du statut principal et des états du tableau de suivi sous forme de badges Dolibarr, avec suppression de la ligne d’état redondante.
 - Suppression de la ligne d’état redondante dans l’onglet Collecte client, le statut principal restant affiché dans la bannière native.
+- Intégration de la fiche Raccordement au contexte `globalcard` et stabilisation de son type d’élément pour son affichage dans `usernavhistory`.
+- Repositionnement du message contenant le lien public généré sous les tableaux de l’onglet Collecte client.
+- Renommage du type de client en type de bénéficiaire avec une aide contextuelle native précisant le titulaire attendu.

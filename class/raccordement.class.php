@@ -204,6 +204,19 @@ class Raccordement extends CommonObject
 	public $import_key;
 
 	/**
+	 * Return the stable external element type used to resolve this object.
+	 *
+	 * The historical element identifier already contains the module prefix, so
+	 * CommonObject::getElementType() would otherwise prefix it a second time.
+	 *
+	 * @return string
+	 */
+	public function getElementType()
+	{
+		return (string) $this->element;
+	}
+
+	/**
 	 * Constructor.
 	 *
 	 * @param DoliDB $db Database handler

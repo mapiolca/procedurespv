@@ -20,10 +20,12 @@ require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/company.lib.php';
 
 $langs->loadLangs(array('procedurespv@procedurespv'));
+$form = new Form($db);
 
 /**
  * Load configured ENEDIS mandate PDF model.
@@ -1196,7 +1198,8 @@ print '<input type="hidden" name="action" value="submit_collecte">';
 print '<section class="public-section" id="public-section-client">';
 print '<div class="public-section-header"><span class="public-step">1</span><h2>'.$langs->trans('PublicSectionClient').'</h2></div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('ClientType').'</td><td><select class="flat minwidth200" name="client_type" id="client_type">';
+$beneficiaryTypeLabel = $form->textwithpicto($langs->trans('BeneficiaryType'), $langs->trans('BeneficiaryTypeHelp'), 1, 'info', 'valignmiddle', 0, 3, 'beneficiarytypeonsmartphone');
+print '<tr><td class="titlefield">'.$beneficiaryTypeLabel.'</td><td><select class="flat minwidth200" name="client_type" id="client_type">';
 foreach (array('particulier' => 'ClientTypeIndividual', 'societe' => 'ClientTypeCompany', 'collectivite' => 'ClientTypePublicEntity', 'association' => 'ClientTypeAssociation') as $value => $labelKey) {
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formClientType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }

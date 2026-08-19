@@ -163,6 +163,7 @@ if ((int) $latestLink->id > 0) {
 }
 print '</table>';
 print '</div>';
+print '<div class="clearboth"></div>';
 print '</div>';
 
 if ($generatedPublicUrl !== '') {
