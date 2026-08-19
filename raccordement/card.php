@@ -618,7 +618,6 @@ if ($action === 'create' || $action === 'edit') {
 
 	print '<div class="fichehalfright">';
 	print '<table class="border centpercent tableforfield">';
-	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td colspan="2">'.$object->getLibStatut(5).'</td></tr>';
 	$exploitationLabelKey = isset($exploitationTypeOptions[(string) $object->type_exploitation]) ? $exploitationTypeOptions[(string) $object->type_exploitation] : '';
 	procedurespvPrintDraftEditableRow($object, 'type_exploitation', $langs->trans('ExploitationType'), ($exploitationLabelKey !== '' ? $langs->trans($exploitationLabelKey) : dol_escape_htmltag((string) $object->type_exploitation)), procedurespvRenderDraftFieldInput($object, 'type_exploitation', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'puissance_installee_kwc', $langs->trans('InstalledPowerKwc'), price((float) $object->puissance_installee_kwc).' kWc', procedurespvRenderDraftFieldInput($object, 'puissance_installee_kwc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);

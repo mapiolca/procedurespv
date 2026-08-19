@@ -419,7 +419,7 @@ class Raccordement extends CommonObject
 		}
 
 		if (function_exists('dolGetStatus')) {
-			return dolGetStatus($label, '', '', $statusType, $mode);
+			return dolGetStatus($label, '', '', 'status'.$statusType, $mode);
 		}
 
 		return '<span class="badge badge-status'.$statusType.'">'.dol_escape_htmltag($label).'</span>';

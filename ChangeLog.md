@@ -27,4 +27,5 @@
 - Ajout d’un bandeau d’étapes sticky avec pilule active selon la section visible dans le formulaire public de collecte.
 - Ajout des traductions manquantes des champs d’adresse du site de production dans le formulaire public.
 - Raccourcissement des types de modèles de courriels natifs pour respecter la taille de colonne Dolibarr `c_email_templates.type_template`.
-- Correction du débordement horizontal de la liste des raccordements en activant le mode de liste natif Dolibarr.
+- Refonte native de la liste des raccordements : défilement horizontal interne, choix des colonnes, filtres alignés sur les préférences utilisateur et massaction de suppression.
+- Affichage du statut principal sous forme de badge Dolibarr dans la bannière de la fiche et suppression de la ligne d’état redondante.
