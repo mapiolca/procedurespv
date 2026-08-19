@@ -25,7 +25,7 @@ require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/company.lib.php';
 
-$langs->loadLangs(array('procedurespv@procedurespv'));
+$langs->loadLangs(array('procedurespv@procedurespv', 'companies'));
 $form = new Form($db);
 $formcompany = new FormCompany($db);
 
@@ -740,7 +740,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 		'headquarters_town' => array($headquartersTown, 'Town'),
 		'beneficiary_town_insee_code' => array($beneficiaryTownInseeCode, 'BeneficiaryTownInseeCode'),
 		'client_phone' => array($clientPhone, 'Phone'),
-		'representative_mobile' => array($representativeMobile, 'MobilePhone'),
+		'representative_mobile' => array($representativeMobile, 'PhoneMobile'),
 	);
 	if ($isNonIndividual) {
 		$requiredBeneficiaryFields['client_name'] = array($clientName, 'BeneficiaryOrganizationName');
@@ -1316,7 +1316,7 @@ print '<tr><td>'.$langs->trans('BeneficiaryTownInseeCode').'</td><td><input type
 print '<tr><td>'.$langs->trans('Country').' <span class="opacitymedium">('.$langs->trans('PublicOptionalField').')</span></td><td>'.$form->select_country($formBeneficiaryCountryId, 'beneficiary_country_id', '', 0, 'minwidth300', '', 1).'</td></tr>';
 print '<tr><td>'.$langs->trans('BeneficiaryCedex').'</td><td><input type="text" class="flat minwidth200" name="beneficiary_cedex" value="'.dol_escape_htmltag($formBeneficiaryCedex).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
-print '<tr><td>'.$langs->trans('MobilePhone').'</td><td><input type="text" class="flat minwidth200" name="representative_mobile" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeMobile).'"></td></tr>';
+print '<tr><td>'.$langs->trans('PhoneMobile').'</td><td><input type="text" class="flat minwidth200" name="representative_mobile" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeMobile).'"></td></tr>';
 print '</table>';
 print '</section>';
 
