@@ -131,7 +131,7 @@ $pieces = $pieceFetcher->fetchAllByRaccordement((int) $object->id);
 $latestSignature = new Signature($db);
 $latestSignature->fetchLatestForRaccordement((int) $object->id, Signature::TYPE_MANDAT_ENEDIS);
 
-llxHeader('', $langs->trans('CollecteClient'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-collecte');
+llxHeader('', $langs->trans('CollecteClient'), '', '', 0, 0, '', '', '', 'classforhorizontalscrolloftabs mod-procedurespv page-raccordement-collecte');
 
 $head = procedurespvRaccordementPrepareHead($object);
 print dol_get_fiche_head($head, 'collecte', $langs->trans('Raccordement'), -1, $object->picto);
@@ -141,14 +141,17 @@ dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 
 print '<div class="fichecenter">';
 print '<div class="fichehalfleft">';
+print '<div class="div-table-responsive-no-min">';
 print '<table class="border centpercent">';
 print '<tr><td>'.$langs->trans('CollecteSentDate').'</td><td>'.(!empty($object->date_collecte_envoi) ? dol_print_date((int) $object->date_collecte_envoi, 'dayhour') : '').'</td></tr>';
 print '<tr><td>'.$langs->trans('CollecteOpenedDate').'</td><td>'.(!empty($object->date_collecte_ouverture) ? dol_print_date((int) $object->date_collecte_ouverture, 'dayhour') : '').'</td></tr>';
 print '<tr><td>'.$langs->trans('CollecteSubmittedDate').'</td><td>'.(!empty($object->date_collecte_soumission) ? dol_print_date((int) $object->date_collecte_soumission, 'dayhour') : '').'</td></tr>';
 print '</table>';
 print '</div>';
+print '</div>';
 
 print '<div class="fichehalfright">';
+print '<div class="div-table-responsive-no-min">';
 print '<table class="border centpercent">';
 print '<tr class="liste_titre"><td colspan="2">'.$langs->trans('LatestPublicLink').'</td></tr>';
 if ((int) $latestLink->id > 0) {
@@ -162,6 +165,7 @@ if ((int) $latestLink->id > 0) {
 	print '<tr class="oddeven"><td colspan="2"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
 }
 print '</table>';
+print '</div>';
 print '</div>';
 print '<div class="clearboth"></div>';
 print '</div>';
@@ -179,9 +183,11 @@ if ($permissiontosend) {
 	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">';
 	print '<input type="hidden" name="token" value="'.newToken().'">';
 	print '<input type="hidden" name="action" value="generate_link">';
+	print '<div class="div-table-responsive-no-min">';
 	print '<table class="border centpercent">';
 	print '<tr><td class="titlefield">'.$langs->trans('RecipientEmail').'</td><td><input type="email" class="flat minwidth300" name="email_destinataire" value="'.dol_escape_htmltag((string) $latestLink->email_destinataire).'"></td></tr>';
 	print '</table>';
+	print '</div>';
 	print '<div class="center"><input type="submit" class="button" value="'.$langs->trans('GeneratePublicLink').'"></div>';
 	print '</form>';
 
@@ -193,6 +199,7 @@ if ($permissiontosend) {
 }
 
 print '<br>';
+print '<div class="div-table-responsive-no-min">';
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre">';
 print '<td>'.$langs->trans('Piece').'</td>';
@@ -220,8 +227,10 @@ if (!empty($pieces)) {
 	print '<tr class="oddeven"><td colspan="5"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
 }
 print '</table>';
+print '</div>';
 
 print '<br>';
+print '<div class="div-table-responsive-no-min">';
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre">';
 print '<td>'.$langs->trans('MandatEnedis').'</td>';
@@ -237,7 +246,9 @@ if ((int) $latestSignature->id > 0) {
 	print '<td class="center"><span class="badge">'.$langs->trans($latestSignature->getStatusLabelKey()).'</span></td>';
 	print '<td>'.dol_escape_htmltag((string) $latestSignature->signataire_nom).'<br><span class="opacitymedium">'.dol_escape_htmltag((string) $latestSignature->signataire_email).'</span></td>';
 	print '<td>'.(!empty($latestSignature->signature_date) ? dol_print_date((int) $latestSignature->signature_date, 'dayhour') : '').'</td>';
-	print '<td><span class="opacitymedium">'.dol_escape_htmltag((string) $latestSignature->pdf_hash).'</span></td>';
+	$pdfHash = (string) $latestSignature->pdf_hash;
+	$pdfHashDisplay = dol_strlen($pdfHash) > 15 ? dol_substr($pdfHash, 0, 15).'...' : $pdfHash;
+	print '<td><span class="opacitymedium" title="'.dol_escape_htmltag($pdfHash).'">'.dol_escape_htmltag($pdfHashDisplay).'</span></td>';
 	print '<td class="center">';
 	if ($permissiontovalidatemandat) {
 		print '<a class="button small" href="'.dol_buildpath('/procedurespv/raccordement/collecte.php', 1).'?id='.(int) $object->id.'&action=validate_mandat&signatureid='.(int) $latestSignature->id.'&token='.newToken().'">'.$langs->trans('ValidateMandat').'</a> ';
@@ -249,6 +260,7 @@ if ((int) $latestSignature->id > 0) {
 	print '<tr class="oddeven"><td colspan="6"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
 }
 print '</table>';
+print '</div>';
 
 print dol_get_fiche_end();
 
