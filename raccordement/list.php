@@ -152,7 +152,7 @@ if (!$resql) {
 $num = $resql ? $db->num_rows($resql) : 0;
 $arrayofselected = array();
 
-llxHeader('', $langs->trans('RaccordementList'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-list');
+llxHeader('', $langs->trans('RaccordementList'), '', '', 0, 0, '', '', '', 'bodyforlist poslist mod-procedurespv page-raccordement-list');
 
 $newcardbutton = '';
 if ($permissiontoadd) {
