@@ -21,11 +21,13 @@ require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/company.lib.php';
 
 $langs->loadLangs(array('procedurespv@procedurespv'));
 $form = new Form($db);
+$formcompany = new FormCompany($db);
 
 /**
  * Load configured ENEDIS mandate PDF model.
@@ -338,6 +340,21 @@ function procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice = '', $si
 }
 
 /**
+ * Return the ENEDIS beneficiary statuses supported by the public form.
+ *
+ * @return array<string,string> Status code => translation key
+ */
+function procedurespvPublicGetBeneficiaryStatuses()
+{
+	return array(
+		'particulier' => 'ClientTypeIndividual',
+		'societe' => 'ClientTypeCompany',
+		'collectivite' => 'ClientTypePublicEntity',
+		'administration' => 'ClientTypeAdministration',
+	);
+}
+
+/**
  * Store one uploaded public piece.
  *
  * @param Translate $langs Language handler
@@ -471,23 +488,35 @@ if ($action === 'download_mandat') {
 }
 
 $isSubmitCollecte = $action === 'submit_collecte';
+$beneficiaryStatuses = procedurespvPublicGetBeneficiaryStatuses();
 $formClientType = $isSubmitCollecte ? GETPOST('client_type', 'alphanohtml') : 'particulier';
+$formClientType = $formClientType === 'association' ? 'administration' : $formClientType;
+if (!isset($beneficiaryStatuses[$formClientType])) {
+	$formClientType = 'particulier';
+}
 $formClientName = $isSubmitCollecte ? GETPOST('client_name', 'restricthtml') : '';
 $formClientSiret = $isSubmitCollecte ? GETPOST('client_siret', 'alphanohtml') : '';
 $formClientEmail = $isSubmitCollecte ? GETPOST('client_email', 'restricthtml') : (string) $publicLink->email_destinataire;
 $formClientPhone = $isSubmitCollecte ? GETPOST('client_phone', 'alphanohtml') : '';
+$formCompanyWithoutSiret = $isSubmitCollecte ? GETPOSTINT('company_without_siret') : 0;
 $formCompanyInseeCode = $isSubmitCollecte ? GETPOST('company_insee_code', 'alphanohtml') : '';
 $formCompanyCapital = $isSubmitCollecte ? GETPOST('company_capital', 'alphanohtml') : '';
-$formCompanyLegalForm = $isSubmitCollecte ? GETPOST('company_legal_form', 'restricthtml') : '';
-$formCompanySize = $isSubmitCollecte ? GETPOST('company_size', 'alphanohtml') : 'pme';
-$formCompanyNaceSector = $isSubmitCollecte ? GETPOST('company_nace_sector', 'restricthtml') : '';
+$formCompanyLegalForm = $isSubmitCollecte ? GETPOSTINT('company_legal_form') : 0;
+$formPublicEngagementCode = $isSubmitCollecte ? GETPOST('public_engagement_code', 'alphanohtml') : '';
+$formPublicServiceCode = $isSubmitCollecte ? GETPOST('public_service_code', 'alphanohtml') : '';
+$formRepresentativeFunction = $isSubmitCollecte ? GETPOST('representative_function', 'restricthtml') : '';
+$formBeneficiaryCivility = $isSubmitCollecte ? GETPOST('beneficiary_civility', 'alphanohtml') : '';
 $formRepresentativeLastname = $isSubmitCollecte ? GETPOST('representative_lastname', 'restricthtml') : '';
 $formRepresentativeFirstname = $isSubmitCollecte ? GETPOST('representative_firstname', 'restricthtml') : '';
 $formRepresentativeMobile = $isSubmitCollecte ? GETPOST('representative_mobile', 'alphanohtml') : '';
-$formRepresentativeAuthorized = $isSubmitCollecte ? GETPOST('representative_authorized', 'alphanohtml') : 'yes';
+$formBeneficiaryStreetNumber = $isSubmitCollecte ? GETPOST('beneficiary_street_number', 'restricthtml') : '';
 $formHeadquartersAddress = $isSubmitCollecte ? GETPOST('headquarters_address', 'restricthtml') : '';
+$formBeneficiaryAddressComplement = $isSubmitCollecte ? GETPOST('beneficiary_address_complement', 'restricthtml') : '';
 $formHeadquartersZip = $isSubmitCollecte ? GETPOST('headquarters_zip', 'alphanohtml') : '';
 $formHeadquartersTown = $isSubmitCollecte ? GETPOST('headquarters_town', 'restricthtml') : '';
+$formBeneficiaryTownInseeCode = $isSubmitCollecte ? GETPOST('beneficiary_town_insee_code', 'alphanohtml') : '';
+$formBeneficiaryCountryId = $isSubmitCollecte ? GETPOSTINT('beneficiary_country_id') : (!empty($mysoc->country_id) ? (int) $mysoc->country_id : 0);
+$formBeneficiaryCedex = $isSubmitCollecte ? GETPOST('beneficiary_cedex', 'restricthtml') : '';
 $formProducerIsBuildingOwner = $isSubmitCollecte ? GETPOST('producer_is_building_owner', 'alphanohtml') : 'yes';
 $formBuildingOwnerName = $isSubmitCollecte ? GETPOST('building_owner_name', 'restricthtml') : '';
 $formBuildingAlreadyBuilt = $isSubmitCollecte ? GETPOST('building_already_built', 'alphanohtml') : 'yes';
@@ -537,18 +566,25 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$clientSiret = is_string($clientSiret) ? $clientSiret : '';
 	$clientEmail = $formClientEmail;
 	$clientPhone = $formClientPhone;
+	$companyWithoutSiret = $clientType === 'societe' && $formCompanyWithoutSiret === 1;
 	$companyInseeCode = $formCompanyInseeCode;
 	$companyCapital = $formCompanyCapital;
-	$companyLegalForm = $formCompanyLegalForm;
-	$companySize = $formCompanySize;
-	$companyNaceSector = $formCompanyNaceSector;
+	$companyLegalForm = (int) $formCompanyLegalForm;
+	$publicEngagementCode = $formPublicEngagementCode;
+	$publicServiceCode = $formPublicServiceCode;
+	$representativeFunction = $formRepresentativeFunction;
+	$beneficiaryCivility = $formBeneficiaryCivility;
 	$representativeLastname = $formRepresentativeLastname;
 	$representativeFirstname = $formRepresentativeFirstname;
 	$representativeMobile = $formRepresentativeMobile;
-	$representativeAuthorized = $formRepresentativeAuthorized;
+	$beneficiaryStreetNumber = $formBeneficiaryStreetNumber;
 	$headquartersAddress = $formHeadquartersAddress;
+	$beneficiaryAddressComplement = $formBeneficiaryAddressComplement;
 	$headquartersZip = $formHeadquartersZip;
 	$headquartersTown = $formHeadquartersTown;
+	$beneficiaryTownInseeCode = $formBeneficiaryTownInseeCode;
+	$beneficiaryCountryId = (int) $formBeneficiaryCountryId;
+	$beneficiaryCedex = $formBeneficiaryCedex;
 	$producerIsBuildingOwner = $formProducerIsBuildingOwner;
 	$buildingOwnerName = $formBuildingOwnerName;
 	$buildingAlreadyBuilt = $formBuildingAlreadyBuilt;
@@ -580,8 +616,30 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$uploadedPieceIds = array();
 	$signatureId = 0;
 
-	if ($clientType === 'societe' && $signataireNom === '' && trim($representativeFirstname.' '.$representativeLastname) !== '') {
+	if ($clientType === 'particulier') {
+		$clientName = trim($representativeFirstname.' '.$representativeLastname);
+		$clientSiret = '';
+	} elseif ($clientType !== 'societe') {
+		$companyWithoutSiret = false;
+	}
+	if ($clientType !== 'societe') {
+		$companyInseeCode = '';
+		$companyCapital = '';
+		$companyLegalForm = 0;
+	}
+	if ($clientType !== 'collectivite') {
+		$publicEngagementCode = '';
+		$publicServiceCode = '';
+	}
+	if ($clientType !== 'societe' && $clientType !== 'collectivite') {
+		$representativeFunction = '';
+	}
+
+	if ($signataireNom === '' && trim($representativeFirstname.' '.$representativeLastname) !== '') {
 		$signataireNom = trim($representativeFirstname.' '.$representativeLastname);
+	}
+	if ($signataireFonction === '' && $representativeFunction !== '') {
+		$signataireFonction = $representativeFunction;
 	}
 
 	foreach (procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice, $siteAlreadyConnected) as $pieceDefinition) {
@@ -601,26 +659,38 @@ if ($linkUsable && $action === 'submit_collecte') {
 	}
 
 	$publicSummary = array(
+		'beneficiary_status' => $clientType,
 		'client_type' => $clientType,
 		'client_name' => $clientName,
 		'client_siret' => $clientSiret,
 		'client_email' => $clientEmail,
 		'client_phone' => $clientPhone,
 		'company' => array(
+			'without_siret' => $companyWithoutSiret,
 			'insee_code' => $companyInseeCode,
 			'capital' => $companyCapital,
 			'legal_form' => $companyLegalForm,
-			'size' => $companySize,
-			'nace_sector' => $companyNaceSector,
 		),
-		'representative' => array(
+		'public_entity' => array(
+			'engagement_code' => $publicEngagementCode,
+			'service_code' => $publicServiceCode,
+		),
+		'beneficiary_contact' => array(
+			'civility' => $beneficiaryCivility,
+			'function' => $representativeFunction,
 			'lastname' => $representativeLastname,
 			'firstname' => $representativeFirstname,
 			'mobile' => $representativeMobile,
-			'authorized' => $representativeAuthorized,
-			'headquarters_address' => $headquartersAddress,
-			'headquarters_zip' => $headquartersZip,
-			'headquarters_town' => $headquartersTown,
+			'street_number' => $beneficiaryStreetNumber,
+			'address' => $headquartersAddress,
+			'address_complement' => $beneficiaryAddressComplement,
+			'zip' => $headquartersZip,
+			'town' => $headquartersTown,
+			'town_insee_code' => $beneficiaryTownInseeCode,
+			'country_id' => $beneficiaryCountryId,
+			'cedex' => $beneficiaryCedex,
+		),
+		'building' => array(
 			'producer_is_building_owner' => $producerIsBuildingOwner,
 			'building_owner_name' => $buildingOwnerName,
 			'building_already_built' => $buildingAlreadyBuilt,
@@ -656,25 +726,40 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$object->status = 4;
 	$object->context['trigger_reason'] = 'public_collecte_submitted';
 	$object->context['changed_fields'] = array('status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'puissance_souscrite', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
-	if ($clientType === 'societe' && $clientSiret === '') {
+	$isNonIndividual = $clientType !== 'particulier';
+	if ($isNonIndividual && !($clientType === 'societe' && $companyWithoutSiret) && $clientSiret === '') {
 		$uploadErrors[] = $langs->trans('BeneficiarySiretRequired');
+	}
+	$requiredBeneficiaryFields = array(
+		'beneficiary_civility' => array($beneficiaryCivility, 'BeneficiaryCivility'),
+		'client_email' => array($clientEmail, 'Email'),
+		'representative_lastname' => array($representativeLastname, 'BeneficiaryLastname'),
+		'representative_firstname' => array($representativeFirstname, 'BeneficiaryFirstname'),
+		'headquarters_address' => array($headquartersAddress, 'BeneficiaryAddress'),
+		'headquarters_zip' => array($headquartersZip, 'Zip'),
+		'headquarters_town' => array($headquartersTown, 'Town'),
+		'beneficiary_town_insee_code' => array($beneficiaryTownInseeCode, 'BeneficiaryTownInseeCode'),
+		'client_phone' => array($clientPhone, 'Phone'),
+		'representative_mobile' => array($representativeMobile, 'MobilePhone'),
+	);
+	if ($isNonIndividual) {
+		$requiredBeneficiaryFields['client_name'] = array($clientName, 'BeneficiaryOrganizationName');
+	}
+	if ($clientType === 'societe' || $clientType === 'collectivite') {
+		$requiredBeneficiaryFields['representative_function'] = array($representativeFunction, 'BeneficiaryRepresentativeFunction');
+	}
+	foreach ($requiredBeneficiaryFields as $requiredBeneficiaryField) {
+		if (trim((string) $requiredBeneficiaryField[0]) === '') {
+			$uploadErrors[] = $langs->trans('PublicRequiredFieldMissing', $langs->trans($requiredBeneficiaryField[1]));
+		}
 	}
 	if ($clientType === 'societe') {
 		$requiredCompanyFields = array(
-			'client_name' => array($clientName, 'NameOrCompany'),
 			'company_insee_code' => array($companyInseeCode, 'CompanyInseeCode'),
 			'company_capital' => array($companyCapital, 'CompanyCapital'),
 			'company_legal_form' => array($companyLegalForm, 'CompanyLegalForm'),
-			'company_nace_sector' => array($companyNaceSector, 'CompanyNaceSector'),
-			'representative_lastname' => array($representativeLastname, 'RepresentativeLastname'),
-			'representative_firstname' => array($representativeFirstname, 'RepresentativeFirstname'),
-			'representative_authorized' => array($representativeAuthorized, 'RepresentativeAuthorized'),
 			'signataire_fonction' => array($signataireFonction, 'SignerFunction'),
 			'signataire_email' => array($signataireEmail, 'SignerEmail'),
-			'client_phone' => array($clientPhone, 'Phone'),
-			'headquarters_address' => array($headquartersAddress, 'HeadquartersAddress'),
-			'headquarters_zip' => array($headquartersZip, 'HeadquartersZip'),
-			'headquarters_town' => array($headquartersTown, 'HeadquartersTown'),
 			'producer_is_building_owner' => array($producerIsBuildingOwner, 'ProducerIsBuildingOwner'),
 			'building_already_built' => array($buildingAlreadyBuilt, 'BuildingAlreadyBuilt'),
 			'site_name' => array($siteName, 'SiteName'),
@@ -702,13 +787,14 @@ if ($linkUsable && $action === 'submit_collecte') {
 		if ($noRelatedProjectAttestation === 'no') {
 			$requiredCompanyFields['related_project_references'] = array($relatedProjectReferences, 'RelatedProjectReferences');
 		}
-		foreach ($requiredCompanyFields as $requiredCompanyField) {
-			if (trim((string) $requiredCompanyField[0]) === '') {
+		foreach ($requiredCompanyFields as $requiredCompanyFieldName => $requiredCompanyField) {
+			$isMissing = trim((string) $requiredCompanyField[0]) === '';
+			if ($requiredCompanyFieldName === 'company_legal_form' && (int) $requiredCompanyField[0] <= 0) {
+				$isMissing = true;
+			}
+			if ($isMissing) {
 				$uploadErrors[] = $langs->trans('PublicRequiredFieldMissing', $langs->trans($requiredCompanyField[1]));
 			}
-		}
-		if ($representativeAuthorized !== 'yes') {
-			$uploadErrors[] = $langs->trans('RepresentativeAuthorizationRequired');
 		}
 		if ($productionSiteSiret !== '' && !preg_match('/^\d{14}$/', $productionSiteSiret)) {
 			$uploadErrors[] = $langs->trans('ProductionSiteSiretInvalid');
@@ -1198,37 +1284,39 @@ print '<input type="hidden" name="action" value="submit_collecte">';
 print '<section class="public-section" id="public-section-client">';
 print '<div class="public-section-header"><span class="public-step">1</span><h2>'.$langs->trans('PublicSectionClient').'</h2></div>';
 print '<table class="public-form-table">';
-$beneficiaryTypeLabel = $form->textwithpicto($langs->trans('BeneficiaryType'), $langs->trans('BeneficiaryTypeHelp'), 1, 'info', 'valignmiddle', 0, 3, 'beneficiarytypeonsmartphone');
+$beneficiaryTypeLabel = $form->textwithpicto($langs->trans('BeneficiaryStatus'), $langs->trans('BeneficiaryTypeHelp'), 1, 'info', 'valignmiddle', 0, 3, 'beneficiarystatusonsmartphone');
 print '<tr><td class="titlefield">'.$beneficiaryTypeLabel.'</td><td><select class="flat minwidth200" name="client_type" id="client_type">';
-foreach (array('particulier' => 'ClientTypeIndividual', 'societe' => 'ClientTypeCompany', 'collectivite' => 'ClientTypePublicEntity', 'association' => 'ClientTypeAssociation') as $value => $labelKey) {
+foreach ($beneficiaryStatuses as $value => $labelKey) {
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formClientType === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('client_type').'</td></tr>';
-print '<tr><td>'.$langs->trans('NameOrCompany').'</td><td><input type="text" class="flat minwidth300" name="client_name" autocomplete="organization" data-company-required="1" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
-print '<tr class="public-company-row" id="client-siret-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-company-required="1"'.($formClientType === 'societe' ? ' required' : '').' value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
-print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" autocomplete="email" value="'.dol_escape_htmltag($formClientEmail).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" data-company-required="1" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td colspan="2"><div class="public-subtitle">'.$langs->trans('BeneficiaryCompanyDetails').'</div></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyInseeCode').'</td><td><input type="text" class="flat minwidth200" name="company_insee_code" data-company-required="1" value="'.dol_escape_htmltag($formCompanyInseeCode).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyCapital').'</td><td><span class="public-unit-field"><input type="text" class="flat width150 right" name="company_capital" data-company-required="1" value="'.dol_escape_htmltag($formCompanyCapital).'"><span class="opacitymedium">EUR</span></span></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyLegalForm').'</td><td><input type="text" class="flat minwidth300" name="company_legal_form" data-company-required="1" value="'.dol_escape_htmltag($formCompanyLegalForm).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanySize').'</td><td><select class="flat minwidth300" name="company_size" id="company_size" data-company-required="1">';
-foreach (array('pme' => 'CompanySizePME', 'eti' => 'CompanySizeETI', 'ge' => 'CompanySizeGE') as $value => $labelKey) {
-	print '<option value="'.dol_escape_htmltag($value).'"'.($formCompanySize === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-}
-print '</select>'.ajax_combobox('company_size').'</td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyNaceSector').'</td><td><input type="text" class="flat minwidth500" name="company_nace_sector" data-company-required="1" value="'.dol_escape_htmltag($formCompanyNaceSector).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td colspan="2"><div class="public-subtitle">'.$langs->trans('CompanyRepresentativeDetails').'</div></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeLastname').'</td><td><input type="text" class="flat minwidth300" name="representative_lastname" id="representative_lastname" autocomplete="family-name" data-company-required="1" value="'.dol_escape_htmltag($formRepresentativeLastname).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeFirstname').'</td><td><input type="text" class="flat minwidth300" name="representative_firstname" id="representative_firstname" autocomplete="given-name" data-company-required="1" value="'.dol_escape_htmltag($formRepresentativeFirstname).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeMobile').'</td><td><input type="text" class="flat minwidth200" name="representative_mobile" autocomplete="tel" value="'.dol_escape_htmltag($formRepresentativeMobile).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('RepresentativeAuthorized').'</td><td><select class="flat minwidth300" name="representative_authorized" id="representative_authorized" data-company-required="1"><option value="yes"'.($formRepresentativeAuthorized === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formRepresentativeAuthorized === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('representative_authorized').'<span class="public-help">'.$langs->trans('RepresentativeAuthorizedHelp').'</span></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersAddress').'</td><td><input type="text" class="flat minwidth500" name="headquarters_address" autocomplete="street-address" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersAddress).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersZip').'</td><td><input type="text" class="flat maxwidth100" name="headquarters_zip" autocomplete="postal-code" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersZip).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('HeadquartersTown').'</td><td><input type="text" class="flat minwidth300" name="headquarters_town" autocomplete="address-level2" data-company-required="1" value="'.dol_escape_htmltag($formHeadquartersTown).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProducerIsBuildingOwner').'</td><td><select class="flat minwidth150" name="producer_is_building_owner" id="producer_is_building_owner" data-company-required="1"><option value="yes"'.($formProducerIsBuildingOwner === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formProducerIsBuildingOwner === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('producer_is_building_owner').'</td></tr>';
-print '<tr class="public-company-row public-building-owner-row"'.($formClientType === 'societe' && $formProducerIsBuildingOwner === 'no' ? '' : ' hidden').'><td>'.$langs->trans('BuildingOwnerName').'</td><td><input type="text" class="flat minwidth300" name="building_owner_name" id="building_owner_name" value="'.dol_escape_htmltag($formBuildingOwnerName).'"></td></tr>';
-print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BuildingAlreadyBuilt').'</td><td><select class="flat minwidth150" name="building_already_built" id="building_already_built" data-company-required="1"><option value="yes"'.($formBuildingAlreadyBuilt === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formBuildingAlreadyBuilt === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('building_already_built').'</td></tr>';
+print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyWithoutSiret').'</td><td>'.$form->selectyesno('company_without_siret', $formCompanyWithoutSiret, 1, false, 0, 1).'<span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+print '<tr class="public-beneficiary-nonindividual-row" id="client-siret-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-beneficiary-nonindividual-required="1" value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
+$organizationLabel = '<span id="beneficiary_organization_name_label" data-company-label="'.dol_escape_htmltag($langs->trans('BeneficiaryCompanyName')).'" data-public-label="'.dol_escape_htmltag($langs->trans('BeneficiaryPublicEntityName')).'" data-administration-label="'.dol_escape_htmltag($langs->trans('BeneficiaryAdministrationName')).'">'.$langs->trans($formClientType === 'societe' ? 'BeneficiaryCompanyName' : ($formClientType === 'collectivite' ? 'BeneficiaryPublicEntityName' : 'BeneficiaryAdministrationName')).'</span>';
+print '<tr class="public-beneficiary-nonindividual-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$organizationLabel.'</td><td><input type="text" class="flat minwidth500" name="client_name" autocomplete="organization" data-beneficiary-nonindividual-required="1" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
+print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyInseeCode').'</td><td><input type="text" class="flat minwidth300" name="company_insee_code" maxlength="5" data-beneficiary-company-required="1" value="'.dol_escape_htmltag($formCompanyInseeCode).'"></td></tr>';
+print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyCapital').'</td><td><span class="public-unit-field"><input type="text" class="flat width150 right" name="company_capital" data-beneficiary-company-required="1" value="'.dol_escape_htmltag($formCompanyCapital).'"><span class="opacitymedium">EUR</span></span></td></tr>';
+print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyLegalForm').'</td><td>'.$formcompany->select_juridicalstatus($formCompanyLegalForm, 0, '', 'company_legal_form', 'minwidth300 beneficiary-company-required').'</td></tr>';
+$engagementCodeLabel = $form->textwithpicto($langs->trans('PublicEngagementCode'), $langs->trans('PublicEngagementCodeHelp'), 1, 'info');
+$serviceCodeLabel = $form->textwithpicto($langs->trans('PublicServiceCode'), $langs->trans('PublicServiceCodeHelp'), 1, 'info');
+print '<tr class="public-beneficiary-public-row"'.($formClientType === 'collectivite' ? '' : ' hidden').'><td>'.$engagementCodeLabel.'</td><td><input type="text" class="flat minwidth300" name="public_engagement_code" value="'.dol_escape_htmltag($formPublicEngagementCode).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+print '<tr class="public-beneficiary-public-row"'.($formClientType === 'collectivite' ? '' : ' hidden').'><td>'.$serviceCodeLabel.'</td><td><input type="text" class="flat minwidth300" name="public_service_code" value="'.dol_escape_htmltag($formPublicServiceCode).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+$representativeFunctionLabel = '<span id="beneficiary_representative_function_label" data-company-label="'.dol_escape_htmltag($langs->trans('CompanyRepresentativeFunction')).'" data-public-label="'.dol_escape_htmltag($langs->trans('PublicEntityRepresentativeFunction')).'">'.$langs->trans($formClientType === 'collectivite' ? 'PublicEntityRepresentativeFunction' : 'CompanyRepresentativeFunction').'</span>';
+print '<tr class="public-beneficiary-representative-function-row"'.(($formClientType === 'societe' || $formClientType === 'collectivite') ? '' : ' hidden').'><td>'.$representativeFunctionLabel.'</td><td><input type="text" class="flat minwidth500" name="representative_function" id="representative_function" data-beneficiary-representative-function-required="1" value="'.dol_escape_htmltag($formRepresentativeFunction).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryCivility').'</td><td>'.$formcompany->select_civility($formBeneficiaryCivility, 'beneficiary_civility', 'minwidth200 beneficiary-required', 1).'</td></tr>';
+print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" autocomplete="email" data-beneficiary-required="1" value="'.dol_escape_htmltag($formClientEmail).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryLastname').'</td><td><input type="text" class="flat minwidth300" name="representative_lastname" id="representative_lastname" autocomplete="family-name" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeLastname).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryFirstname').'</td><td><input type="text" class="flat minwidth300" name="representative_firstname" id="representative_firstname" autocomplete="given-name" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeFirstname).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryStreetNumber').'</td><td><input type="text" class="flat maxwidth100" name="beneficiary_street_number" autocomplete="address-line1" value="'.dol_escape_htmltag($formBeneficiaryStreetNumber).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryAddress').'</td><td><input type="text" class="flat minwidth500" name="headquarters_address" autocomplete="address-line1" maxlength="33" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersAddress).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryAddressComplement').'</td><td><input type="text" class="flat minwidth500" name="beneficiary_address_complement" autocomplete="address-line2" value="'.dol_escape_htmltag($formBeneficiaryAddressComplement).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="headquarters_town" autocomplete="address-level2" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersTown).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="headquarters_zip" autocomplete="postal-code" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersZip).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryTownInseeCode').'</td><td><input type="text" class="flat maxwidth100" name="beneficiary_town_insee_code" maxlength="5" inputmode="numeric" data-beneficiary-required="1" value="'.dol_escape_htmltag($formBeneficiaryTownInseeCode).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Country').' <span class="opacitymedium">('.$langs->trans('PublicOptionalField').')</span></td><td>'.$form->select_country($formBeneficiaryCountryId, 'beneficiary_country_id', '', 0, 'minwidth300', '', 1).'</td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryCedex').'</td><td><input type="text" class="flat minwidth200" name="beneficiary_cedex" value="'.dol_escape_htmltag($formBeneficiaryCedex).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
+print '<tr><td>'.$langs->trans('MobilePhone').'</td><td><input type="text" class="flat minwidth200" name="representative_mobile" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeMobile).'"></td></tr>';
 print '</table>';
 print '</section>';
 
@@ -1236,6 +1324,9 @@ print '<section class="public-section" id="public-section-site">';
 print '<div class="public-section-header"><span class="public-step">2</span><h2>'.$langs->trans('PublicSectionSite').'</h2></div>';
 print '<table class="public-form-table">';
 print '<tr><td class="titlefield">'.$langs->trans('SiteName').'</td><td><input type="text" class="flat minwidth300" name="site_name" data-company-required="1" value="'.dol_escape_htmltag($formSiteName).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProducerIsBuildingOwner').'</td><td><select class="flat minwidth150" name="producer_is_building_owner" id="producer_is_building_owner" data-company-required="1"><option value="yes"'.($formProducerIsBuildingOwner === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formProducerIsBuildingOwner === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('producer_is_building_owner').'</td></tr>';
+print '<tr class="public-company-row public-building-owner-row"'.($formClientType === 'societe' && $formProducerIsBuildingOwner === 'no' ? '' : ' hidden').'><td>'.$langs->trans('BuildingOwnerName').'</td><td><input type="text" class="flat minwidth300" name="building_owner_name" id="building_owner_name" value="'.dol_escape_htmltag($formBuildingOwnerName).'"></td></tr>';
+print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BuildingAlreadyBuilt').'</td><td><select class="flat minwidth150" name="building_already_built" id="building_already_built" data-company-required="1"><option value="yes"'.($formBuildingAlreadyBuilt === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formBuildingAlreadyBuilt === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('building_already_built').'</td></tr>';
 print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProductionSiteSiret').'</td><td><input type="text" class="flat minwidth200" name="production_site_siret" id="production_site_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-company-required="1" value="'.dol_escape_htmltag($formProductionSiteSiret).'"><span class="public-help">'.$langs->trans('ProductionSiteSiretHelp').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" data-company-required="1" value="'.dol_escape_htmltag($formSiteAddress).'"></td></tr>';
 print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" data-company-required="1" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
@@ -1323,10 +1414,15 @@ print '<script>
 (function () {
 	var clientType = document.getElementById("client_type");
 	var siretInput = document.getElementById("client_siret");
+	var companyWithoutSiret = document.getElementById("company_without_siret");
 	var productionSiretInput = document.getElementById("production_site_siret");
 	var representativeLastname = document.getElementById("representative_lastname");
 	var representativeFirstname = document.getElementById("representative_firstname");
+	var representativeFunction = document.getElementById("representative_function");
+	var organizationNameLabel = document.getElementById("beneficiary_organization_name_label");
+	var representativeFunctionLabel = document.getElementById("beneficiary_representative_function_label");
 	var signerName = document.getElementById("signataire_nom");
+	var signerFunction = document.getElementById("signataire_fonction");
 	var producerIsBuildingOwner = document.getElementById("producer_is_building_owner");
 	var siteAlreadyConnected = document.getElementById("site_already_connected");
 	var pdlChoice = document.getElementById("pdl_choice");
@@ -1340,16 +1436,28 @@ print '<script>
 		});
 	}
 	function syncSignerName() {
-		if (!clientType || clientType.value !== "societe" || !signerName || signerName.dataset.userEdited === "1") return;
+		if (!signerName || signerName.dataset.userEdited === "1") return;
 		var fullname = "";
 		if (representativeFirstname && representativeFirstname.value) fullname += representativeFirstname.value.trim();
 		if (representativeLastname && representativeLastname.value) fullname += (fullname ? " " : "") + representativeLastname.value.trim();
 		if (fullname) signerName.value = fullname;
 	}
+	function syncSignerFunction() {
+		if (!representativeFunction || !signerFunction || signerFunction.dataset.userEdited === "1") return;
+		signerFunction.value = representativeFunction.value.trim();
+	}
 	function refreshPublicForm() {
 		if (!clientType) return;
 		var isCompany = clientType.value === "societe";
+		var isIndividual = clientType.value === "particulier";
+		var isPublicEntity = clientType.value === "collectivite";
+		var isAdministration = clientType.value === "administration";
+		var hasNoSiret = isCompany && companyWithoutSiret && companyWithoutSiret.value === "1";
 		setRowsHidden(".public-company-row", !isCompany);
+		setRowsHidden(".public-beneficiary-company-row", !isCompany);
+		setRowsHidden(".public-beneficiary-nonindividual-row", isIndividual);
+		setRowsHidden(".public-beneficiary-public-row", !isPublicEntity);
+		setRowsHidden(".public-beneficiary-representative-function-row", !(isCompany || isPublicEntity));
 		setRowsHidden(".public-building-owner-row", !(isCompany && producerIsBuildingOwner && producerIsBuildingOwner.value === "no"));
 		setRowsHidden(".public-existing-connection-row", !(isCompany && siteAlreadyConnected && siteAlreadyConnected.value === "yes"));
 		setRowsHidden(".public-existing-pdl-detail-row", !(isCompany && siteAlreadyConnected && siteAlreadyConnected.value === "yes" && pdlChoice && pdlChoice.value === "existing_same_legal_entity"));
@@ -1359,10 +1467,34 @@ print '<script>
 			var row = field.closest("tr");
 			field.required = isCompany && (!row || !row.hidden);
 		});
-		if (!isCompany && siretInput) {
-			siretInput.value = "";
+		document.querySelectorAll("[data-beneficiary-required], .beneficiary-required").forEach(function (field) {
+			field.required = true;
+		});
+		document.querySelectorAll("[data-beneficiary-nonindividual-required]").forEach(function (field) {
+			var row = field.closest("tr");
+			field.required = !isIndividual && (!row || !row.hidden);
+		});
+		document.querySelectorAll("[data-beneficiary-company-required], .beneficiary-company-required").forEach(function (field) {
+			var row = field.closest("tr");
+			field.required = isCompany && (!row || !row.hidden);
+		});
+		document.querySelectorAll("[data-beneficiary-representative-function-required]").forEach(function (field) {
+			field.required = isCompany || isPublicEntity;
+		});
+		if (siretInput) {
+			siretInput.disabled = hasNoSiret;
+			siretInput.required = !isIndividual && !hasNoSiret;
+		}
+		if (organizationNameLabel) {
+			if (isCompany) organizationNameLabel.textContent = organizationNameLabel.dataset.companyLabel;
+			else if (isPublicEntity) organizationNameLabel.textContent = organizationNameLabel.dataset.publicLabel;
+			else if (isAdministration) organizationNameLabel.textContent = organizationNameLabel.dataset.administrationLabel;
+		}
+		if (representativeFunctionLabel) {
+			representativeFunctionLabel.textContent = isPublicEntity ? representativeFunctionLabel.dataset.publicLabel : representativeFunctionLabel.dataset.companyLabel;
 		}
 		syncSignerName();
+		syncSignerFunction();
 	}
 	function bindDynamicSelect(field) {
 		if (!field) return;
@@ -1371,15 +1503,25 @@ print '<script>
 			window.jQuery(field).on("change select2:select select2:clear select2:unselect", refreshPublicForm);
 		}
 	}
-	[clientType, producerIsBuildingOwner, siteAlreadyConnected, pdlChoice, noRelatedProjectAttestation].forEach(bindDynamicSelect);
+	[clientType, companyWithoutSiret, producerIsBuildingOwner, siteAlreadyConnected, pdlChoice, noRelatedProjectAttestation].forEach(bindDynamicSelect);
 	[representativeLastname, representativeFirstname].forEach(function (field) {
 		if (field) field.addEventListener("input", function () {
 			syncSignerName();
 		});
 	});
+	if (representativeFunction) {
+		representativeFunction.addEventListener("input", syncSignerFunction);
+	}
 	if (signerName) {
+		if (signerName.value.trim() !== "") signerName.dataset.userEdited = "1";
 		signerName.addEventListener("input", function () {
 			signerName.dataset.userEdited = "1";
+		});
+	}
+	if (signerFunction) {
+		if (signerFunction.value.trim() !== "") signerFunction.dataset.userEdited = "1";
+		signerFunction.addEventListener("input", function () {
+			signerFunction.dataset.userEdited = "1";
 		});
 	}
 	[siretInput, productionSiretInput].forEach(function (field) {

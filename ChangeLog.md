@@ -33,3 +33,4 @@
 - Intégration de la fiche Raccordement au contexte `globalcard` et stabilisation de son type d’élément pour son affichage dans `usernavhistory`.
 - Repositionnement du message contenant le lien public généré sous les tableaux de l’onglet Collecte client.
 - Renommage du type de client en type de bénéficiaire avec une aide contextuelle native précisant le titulaire attendu.
+- Alignement de la section « Informations client » sur les quatre statuts ENEDIS, avec coordonnées communes, champs conditionnels entreprise/collectivité/administration et composants de sélection natifs Dolibarr.

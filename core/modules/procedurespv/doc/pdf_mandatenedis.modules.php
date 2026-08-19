@@ -247,7 +247,7 @@ class pdf_mandatenedis
 	{
 		$this->writeSectionTitle($pdf, $outputlangs, '1 - '.$outputlangs->transnoentitiesnoconv('MandatEnedisParties'));
 		$this->writeSubSectionTitle($pdf, $outputlangs, $outputlangs->transnoentitiesnoconv('MandatEnedisMandant'));
-		$this->writeKeyValue($pdf, $outputlangs, $outputlangs->transnoentitiesnoconv('ClientType'), $this->getClientTypeLabel($data['client_type'], $outputlangs));
+		$this->writeKeyValue($pdf, $outputlangs, $outputlangs->transnoentitiesnoconv('BeneficiaryStatus'), $this->getClientTypeLabel($data['client_type'], $outputlangs));
 		$this->writeKeyValue($pdf, $outputlangs, $outputlangs->transnoentitiesnoconv('NameOrCompany'), $data['client_name']);
 		if ($data['client_siret'] !== '') {
 			$this->writeKeyValue($pdf, $outputlangs, $outputlangs->transnoentitiesnoconv('BeneficiarySiret'), $data['client_siret']);
@@ -548,7 +548,8 @@ class pdf_mandatenedis
 			'particulier' => 'ClientTypeIndividual',
 			'societe' => 'ClientTypeCompany',
 			'collectivite' => 'ClientTypePublicEntity',
-			'association' => 'ClientTypeAssociation',
+			'administration' => 'ClientTypeAdministration',
+			'association' => 'ClientTypeAdministration',
 		);
 		$key = isset($labels[$clientType]) ? $labels[$clientType] : 'Unknown';
 
