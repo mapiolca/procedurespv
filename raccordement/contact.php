@@ -146,11 +146,6 @@ print dol_get_fiche_head($head, 'contacts', $langs->trans('Raccordement'), -1, $
 $linkback = '<a href="'.dol_buildpath('/procedurespv/raccordement/list.php', 1).'?restore_lastsearch_values=1">'.$langs->trans('BackToList').'</a>';
 dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 
-print '<div class="fichecenter">';
-print '<div class="underbanner clearboth"></div>';
-dol_print_object_info($object, 1);
-print '</div>';
-print '<div class="clearboth"></div>';
 print dol_get_fiche_end();
 print '<br>';
 
