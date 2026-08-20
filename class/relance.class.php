@@ -203,6 +203,11 @@ class Relance
 		if ((int) $this->id <= 0) {
 			return -1;
 		}
+		if ((int) $this->status !== self::STATUS_PLANNED) {
+			$this->error = 'InvalidStatusTransition';
+			$this->errors[] = $this->error;
+			return -1;
+		}
 
 		$sql = 'UPDATE '.MAIN_DB_PREFIX.'pvproc_relance SET';
 		$sql .= ' status = '.((int) self::STATUS_SENT);
@@ -234,6 +239,11 @@ class Relance
 	public function markCanceled()
 	{
 		if ((int) $this->id <= 0) {
+			return -1;
+		}
+		if ((int) $this->status !== self::STATUS_PLANNED) {
+			$this->error = 'InvalidStatusTransition';
+			$this->errors[] = $this->error;
 			return -1;
 		}
 
@@ -356,6 +366,25 @@ class Relance
 		$labels = self::getStatusLabels();
 
 		return isset($labels[(int) $this->status]) ? $labels[(int) $this->status] : 'RelanceStatusUnknown';
+	}
+
+	/**
+	 * Return native Dolibarr status badge.
+	 *
+	 * @param int $mode Display mode
+	 * @return string
+	 */
+	public function getLibStatut($mode = 5)
+	{
+		global $langs;
+
+		$statusTypes = array(
+			self::STATUS_PLANNED => 3,
+			self::STATUS_SENT => 4,
+			self::STATUS_CANCELED => 8,
+		);
+
+		return dolGetStatus($langs->trans($this->getStatusLabelKey()), '', '', 'status'.($statusTypes[(int) $this->status] ?? 0), $mode);
 	}
 
 	/**

@@ -33,6 +33,7 @@ class Signature
 	public $rowid;
 	public $entity;
 	public $fk_raccordement;
+	public $fk_publiclink;
 	public $type_signature;
 	public $signataire_nom;
 	public $signataire_fonction;
@@ -76,7 +77,7 @@ class Signature
 		global $conf;
 
 		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
-		$sql = 'SELECT rowid, entity, fk_raccordement, type_signature, signataire_nom, signataire_fonction, signataire_email,';
+		$sql = 'SELECT rowid, entity, fk_raccordement, fk_publiclink, type_signature, signataire_nom, signataire_fonction, signataire_email,';
 		$sql .= ' signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, date_validation,';
 		$sql .= ' fk_user_valid, motif_non_conformite, datec, tms, import_key';
 		$sql .= ' FROM '.MAIN_DB_PREFIX.'pvproc_signature';
@@ -98,7 +99,7 @@ class Signature
 		global $conf;
 
 		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
-		$sql = 'SELECT rowid, entity, fk_raccordement, type_signature, signataire_nom, signataire_fonction, signataire_email,';
+		$sql = 'SELECT rowid, entity, fk_raccordement, fk_publiclink, type_signature, signataire_nom, signataire_fonction, signataire_email,';
 		$sql .= ' signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, date_validation,';
 		$sql .= ' fk_user_valid, motif_non_conformite, datec, tms, import_key';
 		$sql .= ' FROM '.MAIN_DB_PREFIX.'pvproc_signature';
@@ -108,6 +109,21 @@ class Signature
 		$sql .= ' ORDER BY rowid DESC';
 		$sql .= $this->db->plimit(1);
 
+		return $this->fetchFromSql($sql);
+	}
+
+	/** @param int $fkRaccordement Raccordement id @param int $fkPublicLink Revision id @return int */
+	public function fetchForRevision($fkRaccordement, $fkPublicLink)
+	{
+		global $conf;
+
+		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
+		$sql = 'SELECT rowid, entity, fk_raccordement, fk_publiclink, type_signature, signataire_nom, signataire_fonction, signataire_email,';
+		$sql .= ' signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, date_validation,';
+		$sql .= ' fk_user_valid, motif_non_conformite, datec, tms, import_key FROM '.MAIN_DB_PREFIX.'pvproc_signature';
+		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement).' AND fk_publiclink = '.((int) $fkPublicLink);
+		$sql .= ' AND entity IN ('.$entityFilter.')';
+		$sql .= ' ORDER BY rowid DESC'.$this->db->plimit(1);
 		return $this->fetchFromSql($sql);
 	}
 
@@ -121,7 +137,7 @@ class Signature
 	 */
 	public function fetchLatestForRaccordementEntity($fkRaccordement, $entity, $type = self::TYPE_MANDAT_ENEDIS)
 	{
-		$sql = 'SELECT rowid, entity, fk_raccordement, type_signature, signataire_nom, signataire_fonction, signataire_email,';
+		$sql = 'SELECT rowid, entity, fk_raccordement, fk_publiclink, type_signature, signataire_nom, signataire_fonction, signataire_email,';
 		$sql .= ' signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, date_validation,';
 		$sql .= ' fk_user_valid, motif_non_conformite, datec, tms, import_key';
 		$sql .= ' FROM '.MAIN_DB_PREFIX.'pvproc_signature';
@@ -138,17 +154,18 @@ class Signature
 	 * Save a signed mandate.
 	 *
 	 * @param Raccordement $raccordement Parent object
-	 * @param array{signataire_nom:string, signataire_fonction:string, signataire_email:string, signature_ip:string, signature_user_agent:string, filepath:string, filename:string, pdf_hash:string} $data Signature data
+	 * @param array{signataire_nom:string, signataire_fonction:string, signataire_email:string, signature_ip:string, signature_user_agent:string, filepath:string, filename:string, pdf_hash:string, fk_publiclink?:int} $data Signature data
 	 * @return int Signature id or negative value
 	 */
 	public function createSignedMandate($raccordement, array $data)
 	{
 		$now = dol_now();
 		$sql = 'INSERT INTO '.MAIN_DB_PREFIX.'pvproc_signature (';
-		$sql .= 'entity, fk_raccordement, type_signature, signataire_nom, signataire_fonction, signataire_email, signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, datec';
+		$sql .= 'entity, fk_raccordement, fk_publiclink, type_signature, signataire_nom, signataire_fonction, signataire_email, signature_date, signature_ip, signature_user_agent, pdf_hash, filepath, filename, status, datec';
 		$sql .= ') VALUES (';
 		$sql .= ((int) $raccordement->entity).', ';
 		$sql .= ((int) $raccordement->id).', ';
+		$sql .= (!empty($data['fk_publiclink']) ? (int) $data['fk_publiclink'] : 'NULL').', ';
 		$sql .= "'".$this->db->escape(self::TYPE_MANDAT_ENEDIS)."', ";
 		$sql .= "'".$this->db->escape($data['signataire_nom'])."', ";
 		$sql .= "'".$this->db->escape($data['signataire_fonction'])."', ";
@@ -186,7 +203,8 @@ class Signature
 	 */
 	public function setValidationStatus($status, $user, $motif = '')
 	{
-		if ((int) $this->id <= 0) {
+		if ((int) $this->id <= 0 || (int) $this->status !== self::STATUS_TO_CONTROL || !in_array((int) $status, array(self::STATUS_NON_COMPLIANT, self::STATUS_VALIDATED), true)) {
+			$this->error = 'ErrorInvalidMandateTransition';
 			return -1;
 		}
 
@@ -239,6 +257,22 @@ class Signature
 		return isset($labels[(int) $this->status]) ? $labels[(int) $this->status] : 'SignatureStatusUnknown';
 	}
 
+	/** @param int $mode Display mode @return string */
+	public function getLibStatut($mode = 5)
+	{
+		global $langs;
+		$statusTypes = array(
+			self::STATUS_TO_GENERATE => 0,
+			self::STATUS_SENT_TO_CLIENT => 1,
+			self::STATUS_WAITING_SIGNATURE => 1,
+			self::STATUS_SIGNED_ONLINE => 3,
+			self::STATUS_TO_CONTROL => 3,
+			self::STATUS_NON_COMPLIANT => 8,
+			self::STATUS_VALIDATED => 4,
+		);
+		return dolGetStatus($langs->trans($this->getStatusLabelKey()), '', '', 'status'.($statusTypes[(int) $this->status] ?? 0), $mode);
+	}
+
 	/**
 	 * Fetch one object from SQL.
 	 *
@@ -276,6 +310,7 @@ class Signature
 		$this->rowid = (int) $obj->rowid;
 		$this->entity = (int) $obj->entity;
 		$this->fk_raccordement = (int) $obj->fk_raccordement;
+		$this->fk_publiclink = isset($obj->fk_publiclink) ? (int) $obj->fk_publiclink : 0;
 		$this->type_signature = (string) $obj->type_signature;
 		$this->signataire_nom = (string) $obj->signataire_nom;
 		$this->signataire_fonction = (string) $obj->signataire_fonction;

@@ -40,6 +40,7 @@ class modProceduresPV extends DolibarrModules
 
 		$this->module_parts = array(
 			'models' => 1,
+			'triggers' => 1,
 			'hooks' => array(
 				'data' => array('emailtemplates'),
 				'entity' => '0',
@@ -251,6 +252,9 @@ class modProceduresPV extends DolibarrModules
 		if ($result < 0) {
 			return -1;
 		}
+		if ($this->migrateCollectionRevisions() < 0) {
+			return -1;
+		}
 
 		$legacyMandatPdfModel = getDolGlobalString('PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS', '');
 		$mandatPdfModel = $legacyMandatPdfModel !== '' ? $legacyMandatPdfModel : 'mandatenedis';
@@ -314,6 +318,81 @@ class modProceduresPV extends DolibarrModules
 		}
 
 		return $this->_init($sql, $options);
+	}
+
+	/** Apply idempotent schema changes required by collection revisions. @return int */
+	private function migrateCollectionRevisions()
+	{
+		$pieceTable = MAIN_DB_PREFIX.'pvproc_piece';
+		$signatureTable = MAIN_DB_PREFIX.'pvproc_signature';
+		$linkTable = MAIN_DB_PREFIX.'pvproc_publiclink';
+		$pieceRevisionAdded = false;
+
+		if (!$this->columnExists($pieceTable, 'fk_publiclink')) {
+			if (!$this->db->query('ALTER TABLE '.$pieceTable.' ADD COLUMN fk_publiclink integer NULL AFTER fk_raccordement, ADD KEY idx_pvproc_piece_fk_publiclink (fk_publiclink)')) {
+				$this->error = $this->db->lasterror();
+				return -1;
+			}
+			$pieceRevisionAdded = true;
+		}
+		if ($pieceRevisionAdded) {
+			// Migrate the former states once: transmitted/to-control -> to-control, non-compliant -> invalid.
+			$sql = 'UPDATE '.$pieceTable.' SET status = CASE status WHEN 1 THEN 3 WHEN 2 THEN 3 WHEN 3 THEN 5 WHEN 4 THEN 4 ELSE 0 END';
+			if (!$this->db->query($sql)) {
+				$this->error = $this->db->lasterror();
+				return -1;
+			}
+		}
+		if (!$this->indexExists($pieceTable, 'uk_pvproc_piece_revision')) {
+			if (!$this->db->query('ALTER TABLE '.$pieceTable.' ADD UNIQUE KEY uk_pvproc_piece_revision (entity, fk_raccordement, fk_publiclink, code_piece, origin)')) {
+				$this->error = $this->db->lasterror();
+				return -1;
+			}
+		}
+		if (!$this->columnExists($signatureTable, 'fk_publiclink')) {
+			if (!$this->db->query('ALTER TABLE '.$signatureTable.' ADD COLUMN fk_publiclink integer NULL AFTER fk_raccordement, ADD KEY idx_pvproc_signature_fk_publiclink (fk_publiclink)')) {
+				$this->error = $this->db->lasterror();
+				return -1;
+			}
+		}
+		if (!$this->columnExists($linkTable, 'payload')) {
+			if (!$this->db->query('ALTER TABLE '.$linkTable.' ADD COLUMN payload longtext NULL AFTER date_submit')) {
+				$this->error = $this->db->lasterror();
+				return -1;
+			}
+		}
+		// Re-run conservative legacy linking on every activation so an interrupted
+		// migration can resume. Only unambiguous one-piece/one-link cases are linked.
+		$sql = 'UPDATE '.$pieceTable.' AS p';
+		$sql .= ' INNER JOIN (SELECT entity, fk_raccordement, code_piece, origin, MIN(rowid) AS piece_id FROM '.$pieceTable.' WHERE fk_publiclink IS NULL AND origin = \'client\' GROUP BY entity, fk_raccordement, code_piece, origin HAVING COUNT(*) = 1) AS single_piece ON single_piece.piece_id = p.rowid';
+		$sql .= ' INNER JOIN (SELECT entity, fk_raccordement, MIN(rowid) AS link_id FROM '.$linkTable.' WHERE type_link = \'collecte_raccordement\' GROUP BY entity, fk_raccordement HAVING COUNT(*) = 1) AS single_link ON single_link.entity = p.entity AND single_link.fk_raccordement = p.fk_raccordement';
+		$sql .= ' SET p.fk_publiclink = single_link.link_id WHERE p.fk_publiclink IS NULL';
+		if (!$this->db->query($sql)) {
+			$this->error = $this->db->lasterror();
+			return -1;
+		}
+		$sql = 'UPDATE '.$signatureTable.' AS s SET s.fk_publiclink = (SELECT MIN(l.rowid) FROM '.$linkTable.' AS l WHERE l.fk_raccordement = s.fk_raccordement AND l.entity = s.entity AND l.type_link = \'collecte_raccordement\')';
+		$sql .= ' WHERE s.fk_publiclink IS NULL AND (SELECT COUNT(*) FROM '.$linkTable.' AS lc WHERE lc.fk_raccordement = s.fk_raccordement AND lc.entity = s.entity AND lc.type_link = \'collecte_raccordement\') = 1';
+		if (!$this->db->query($sql)) {
+			$this->error = $this->db->lasterror();
+			return -1;
+		}
+
+		return 1;
+	}
+
+	/** @param string $table Table name @param string $column Column name @return bool */
+	private function columnExists($table, $column)
+	{
+		$resql = $this->db->query("SHOW COLUMNS FROM ".$this->db->sanitize($table)." LIKE '".$this->db->escape($column)."'");
+		return $resql && $this->db->num_rows($resql) > 0;
+	}
+
+	/** @param string $table Table name @param string $index Index name @return bool */
+	private function indexExists($table, $index)
+	{
+		$resql = $this->db->query("SHOW INDEX FROM ".$this->db->sanitize($table)." WHERE Key_name = '".$this->db->escape($index)."'");
+		return $resql && $this->db->num_rows($resql) > 0;
 	}
 
 	/**

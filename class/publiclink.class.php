@@ -55,6 +55,7 @@ class PublicLink extends CommonObject
 	public $date_first_access;
 	public $date_last_access;
 	public $date_submit;
+	public $payload;
 	public $ip_last_access;
 	public $user_agent_last_access;
 	public $nb_access;
@@ -137,13 +138,44 @@ class PublicLink extends CommonObject
 	 */
 	public function fetchLatestForRaccordement($fkRaccordement, $type)
 	{
+		global $conf;
+
+		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
 		$sql = 'SELECT rowid, entity, fk_raccordement, type_link, token_hash, email_destinataire, date_creation, date_expiration,';
-		$sql .= ' date_first_access, date_last_access, date_submit, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
+		$sql .= ' date_first_access, date_last_access, date_submit, payload, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
 		$sql .= ' FROM '.MAIN_DB_PREFIX.$this->table_element;
 		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement);
+		$sql .= ' AND entity IN ('.$entityFilter.')';
 		$sql .= " AND type_link = '".$this->db->escape($type)."'";
 		$sql .= ' ORDER BY rowid DESC';
 		$sql .= $this->db->plimit(1);
+
+		return $this->fetchFromSql($sql);
+	}
+
+	/**
+	 * Fetch the last submitted collection payload before the current revision.
+	 *
+	 * @param int $fkRaccordement Raccordement id
+	 * @param int $excludeId Revision to exclude
+	 * @return int
+	 */
+	public function fetchLatestSubmittedForRaccordement($fkRaccordement, $excludeId = 0)
+	{
+		global $conf;
+
+		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
+		$sql = 'SELECT rowid, entity, fk_raccordement, type_link, token_hash, email_destinataire, date_creation, date_expiration,';
+		$sql .= ' date_first_access, date_last_access, date_submit, payload, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.$this->table_element;
+		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement);
+		$sql .= ' AND entity IN ('.$entityFilter.')';
+		$sql .= " AND type_link = '".$this->db->escape(self::TYPE_COLLECTE_RACCORDEMENT)."'";
+		$sql .= ' AND status = '.self::STATUS_SUBMITTED;
+		if ($excludeId > 0) {
+			$sql .= ' AND rowid <> '.((int) $excludeId);
+		}
+		$sql .= ' ORDER BY rowid DESC'.$this->db->plimit(1);
 
 		return $this->fetchFromSql($sql);
 	}
@@ -163,7 +195,7 @@ class PublicLink extends CommonObject
 
 		$hash = hash('sha256', $token);
 		$sql = 'SELECT rowid, entity, fk_raccordement, type_link, token_hash, email_destinataire, date_creation, date_expiration,';
-		$sql .= ' date_first_access, date_last_access, date_submit, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
+		$sql .= ' date_first_access, date_last_access, date_submit, payload, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
 		$sql .= ' FROM '.MAIN_DB_PREFIX.$this->table_element;
 		$sql .= " WHERE token_hash = '".$this->db->escape($hash)."'";
 		$sql .= " AND type_link = '".$this->db->escape($type)."'";
@@ -241,6 +273,11 @@ class PublicLink extends CommonObject
 	 */
 	public function revoke()
 	{
+		if ((int) $this->status !== self::STATUS_ACTIVE) {
+			$this->error = 'InvalidStatusTransition';
+			return -1;
+		}
+
 		return $this->setLinkStatus(self::STATUS_REVOKED);
 	}
 
@@ -251,8 +288,40 @@ class PublicLink extends CommonObject
 	 */
 	public function markSubmitted()
 	{
+		if ((int) $this->status !== self::STATUS_ACTIVE) {
+			$this->error = 'InvalidStatusTransition';
+			return -1;
+		}
+
 		$this->date_submit = dol_now();
 		return $this->setLinkStatus(self::STATUS_SUBMITTED);
+	}
+
+	/** @param array<string,mixed> $payload Submitted form values @return int */
+	public function savePayload(array $payload)
+	{
+		if ((int) $this->id <= 0) {
+			return -1;
+		}
+		$json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+		if (!is_string($json)) {
+			$this->error = 'ErrorUnableToEncodeCollectionPayload';
+			return -1;
+		}
+		$sql = 'UPDATE '.MAIN_DB_PREFIX.$this->table_element.' SET payload = \''.$this->db->escape($json).'\' WHERE rowid = '.((int) $this->id);
+		if (!$this->db->query($sql)) {
+			$this->error = $this->db->lasterror();
+			return -1;
+		}
+		$this->payload = $json;
+		return 1;
+	}
+
+	/** @return array<string,mixed> */
+	public function getPayloadArray()
+	{
+		$decoded = json_decode((string) $this->payload, true);
+		return is_array($decoded) ? $decoded : array();
 	}
 
 	/**
@@ -298,6 +367,7 @@ class PublicLink extends CommonObject
 		$this->date_first_access = $this->db->jdate($obj->date_first_access);
 		$this->date_last_access = $this->db->jdate($obj->date_last_access);
 		$this->date_submit = $this->db->jdate($obj->date_submit);
+		$this->payload = isset($obj->payload) ? (string) $obj->payload : '';
 		$this->ip_last_access = (string) $obj->ip_last_access;
 		$this->user_agent_last_access = (string) $obj->user_agent_last_access;
 		$this->nb_access = (int) $obj->nb_access;

@@ -143,7 +143,9 @@ if (in_array($action, $sensitiveActions, true) && !$permissiontowrite) {
 
 if ($action === 'add_relance') {
 	$relance = new Relance($db);
-	$result = $relance->create($object, procedurespvRelanceReadPayload());
+	$payload = procedurespvRelanceReadPayload();
+	$payload['status'] = Relance::STATUS_PLANNED;
+	$result = $relance->create($object, $payload);
 	if ($result > 0) {
 		setEventMessages($langs->trans('RelanceCreated'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/relances.php', 1).'?id='.(int) $object->id);
@@ -160,7 +162,9 @@ if ($action === 'update_relance') {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
 
-	$result = $relance->update(procedurespvRelanceReadPayload());
+	$payload = procedurespvRelanceReadPayload();
+	$payload['status'] = (int) $relance->status;
+	$result = $relance->update($payload);
 	if ($result > 0) {
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/relances.php', 1).'?id='.(int) $object->id);
@@ -248,11 +252,7 @@ if ($permissiontowrite) {
 		print '<option value="'.dol_escape_htmltag($value).'"'.($editedRelance->canal === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 	}
 	print '</select>'.ajax_combobox('canal').'</td></tr>';
-	print '<tr><td>'.$langs->trans('Status').'</td><td><select class="flat minwidth200" name="status" id="relance_status">';
-	foreach (Relance::getStatusLabels() as $value => $labelKey) {
-		print '<option value="'.((int) $value).'"'.((int) $editedRelance->status === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-	}
-	print '</select>'.ajax_combobox('relance_status').'</td></tr>';
+	print '<tr><td>'.$langs->trans('Status').'</td><td>'.$editedRelance->getLibStatut(5).'</td></tr>';
 	print '<tr><td>'.$langs->trans('EmailTemplate').'</td><td><input type="text" class="flat minwidth300" name="modele_utilise" value="'.dol_escape_htmltag((string) $editedRelance->modele_utilise).'"></td></tr>';
 	print '<tr><td>'.$langs->trans('RelanceResult').'</td><td><textarea class="flat centpercent" name="resultat" rows="2">'.dol_escape_htmltag((string) $editedRelance->resultat).'</textarea></td></tr>';
 	print '<tr><td>'.$langs->trans('Comment').'</td><td><textarea class="flat centpercent" name="commentaire" rows="3">'.dol_escape_htmltag((string) $editedRelance->commentaire).'</textarea></td></tr>';
@@ -291,7 +291,7 @@ if (!empty($relances)) {
 		print '<td class="center">'.($relance->date_prevue ? dol_print_date((int) $relance->date_prevue, 'dayhour') : '').'</td>';
 		print '<td class="center">'.($relance->date_envoi ? dol_print_date((int) $relance->date_envoi, 'dayhour') : '').'</td>';
 		print '<td class="center">'.$langs->trans($canalKey).'</td>';
-		print '<td class="center"><span class="badge">'.$langs->trans($relance->getStatusLabelKey()).'</span></td>';
+		print '<td class="center">'.$relance->getLibStatut(5).'</td>';
 		print '<td>'.dol_escape_htmltag((string) $relance->resultat).'</td>';
 		print '<td class="right nowrap">';
 		if ($permissiontowrite) {

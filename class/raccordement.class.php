@@ -252,7 +252,14 @@ class Raccordement extends CommonObject
 			return -1;
 		}
 
-		return $this->createCommon($user, $notrigger);
+		$result = $this->createCommon($user, 1);
+		if ($result > 0 && !$notrigger) {
+			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_CREATE', $user);
+			if ($triggerResult < 0) {
+				return -1;
+			}
+		}
+		return $result;
 	}
 
 	/**
@@ -295,7 +302,14 @@ class Raccordement extends CommonObject
 	{
 		$this->fk_user_modif = is_object($user) ? (int) $user->id : 0;
 
-		return $this->updateCommon($user, $notrigger);
+		$result = $this->updateCommon($user, 1);
+		if ($result > 0 && !$notrigger) {
+			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $user);
+			if ($triggerResult < 0) {
+				return -1;
+			}
+		}
+		return $result;
 	}
 
 	/**
@@ -307,7 +321,14 @@ class Raccordement extends CommonObject
 	 */
 	public function delete($user, $notrigger = 0)
 	{
-		return $this->deleteCommon($user, $notrigger);
+		$result = $this->deleteCommon($user, 1);
+		if ($result > 0 && !$notrigger) {
+			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_DELETE', $user);
+			if ($triggerResult < 0) {
+				return -1;
+			}
+		}
+		return $result;
 	}
 
 	/**
@@ -462,6 +483,11 @@ class Raccordement extends CommonObject
 	 */
 	public function freezeSnapshot($user)
 	{
+		if (!empty($this->date_snapshot)) {
+			$this->error = 'SnapshotAlreadyFrozen';
+			return -1;
+		}
+
 		$this->date_snapshot = dol_now();
 		$this->context['trigger_reason'] = 'snapshot_freeze';
 		$this->context['changed_fields'] = array('date_snapshot');

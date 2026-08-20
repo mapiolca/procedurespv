@@ -10,10 +10,15 @@
 require '../../../main.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formprojet.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.formfile.class.php';
+require_once DOL_DOCUMENT_ROOT.'/core/class/html.formactions.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/doleditor.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/relance.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 $langs->loadLangs(array('companies', 'projects', 'users', 'procedurespv@procedurespv'));
@@ -31,6 +36,8 @@ if (!isModEnabled('procedurespv')) {
 $object = new Raccordement($db);
 $form = new Form($db);
 $formproject = new FormProjets($db);
+$formfile = new FormFile($db);
+$formactions = new FormActions($db);
 $centralePVAdapter = new CentralePVAdapter($db);
 $hookmanager->initHooks(array('raccordementcard', 'globalcard'));
 
@@ -54,18 +61,18 @@ if ($cancel) {
 }
 
 $statusActions = array(
-	'send_collecte' => array('permission' => 'send_collecte', 'status' => 2, 'message' => 'CollecteMarkedSent'),
-	'mark_collecte_submitted' => array('permission' => 'write', 'status' => 4, 'message' => 'CollecteMarkedSubmitted'),
-	'validate_collecte' => array('permission' => 'validate_collecte', 'status' => 6, 'message' => 'CollecteValidated'),
-	'ready_deposit' => array('permission' => 'write', 'status' => 7, 'message' => 'RaccordementReadyForDeposit'),
-	'deposit_enedis' => array('permission' => 'write', 'status' => 8, 'message' => 'RaccordementDepositedEnedis'),
-	'instruction_enedis' => array('permission' => 'write', 'status' => 9, 'message' => 'RaccordementInstructionEnedis'),
-	'convention_received' => array('permission' => 'manage_convention', 'status' => 11, 'message' => 'ConventionMarkedReceived'),
-	'convention_signed' => array('permission' => 'manage_convention', 'status' => 12, 'message' => 'ConventionMarkedSigned'),
-	'mes_requested' => array('permission' => 'manage_mes', 'status' => 14, 'message' => 'MESMarkedRequested'),
-	'mes_done' => array('permission' => 'manage_mes', 'status' => 15, 'message' => 'MESMarkedDone'),
-	'close' => array('permission' => 'write', 'status' => 16, 'message' => 'RaccordementClosed'),
-	'cancel' => array('permission' => 'write', 'status' => -1, 'message' => 'RaccordementCanceled'),
+	'send_collecte' => array('permission' => 'send_collecte', 'from' => array(0, 1), 'status' => 2, 'message' => 'CollecteMarkedSent'),
+	'mark_collecte_submitted' => array('permission' => 'write', 'from' => array(2, 3), 'status' => 4, 'message' => 'CollecteMarkedSubmitted'),
+	'validate_collecte' => array('permission' => 'validate_collecte', 'from' => array(4, 5), 'status' => 6, 'message' => 'CollecteValidated'),
+	'ready_deposit' => array('permission' => 'write', 'from' => array(6), 'status' => 7, 'message' => 'RaccordementReadyForDeposit'),
+	'deposit_enedis' => array('permission' => 'write', 'from' => array(7), 'status' => 8, 'message' => 'RaccordementDepositedEnedis'),
+	'instruction_enedis' => array('permission' => 'write', 'from' => array(8), 'status' => 9, 'message' => 'RaccordementInstructionEnedis'),
+	'convention_received' => array('permission' => 'manage_convention', 'from' => array(9, 10), 'status' => 11, 'message' => 'ConventionMarkedReceived'),
+	'convention_signed' => array('permission' => 'manage_convention', 'from' => array(11), 'status' => 12, 'message' => 'ConventionMarkedSigned'),
+	'mes_requested' => array('permission' => 'manage_mes', 'from' => array(12, 13), 'status' => 14, 'message' => 'MESMarkedRequested'),
+	'mes_done' => array('permission' => 'manage_mes', 'from' => array(14), 'status' => 15, 'message' => 'MESMarkedDone'),
+	'close' => array('permission' => 'write', 'from' => array(15), 'status' => 16, 'message' => 'RaccordementClosed'),
+	'cancel' => array('permission' => 'write', 'from' => range(0, 15), 'status' => -1, 'message' => 'RaccordementCanceled'),
 );
 $sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_snapshot'), array_keys($statusActions));
 
@@ -309,12 +316,16 @@ if ($action === 'add' && $permissiontoadd) {
 }
 
 if ($action === 'update' && $permissiontoadd && $object->id > 0) {
+	$equipmentService = new RaccordementEquipment($db);
+	$installedPowerIsDerived = $equipmentService->hasModules((int) $object->id);
 	$object->fk_soc = GETPOSTINT('fk_soc') > 0 ? GETPOSTINT('fk_soc') : null;
 	$object->fk_project = GETPOSTINT('fk_project') > 0 ? GETPOSTINT('fk_project') : null;
 	$object->fk_centrale_pv = GETPOSTINT('fk_centrale_pv') > 0 ? GETPOSTINT('fk_centrale_pv') : null;
 	$object->site_source = GETPOST('site_source', 'aZ09');
 	$object->type_exploitation = GETPOST('type_exploitation', 'alphanohtml');
-	$object->puissance_installee_kwc = (float) price2num(GETPOST('puissance_installee_kwc', 'alphanohtml'));
+	if (!$installedPowerIsDerived) {
+		$object->puissance_installee_kwc = (float) price2num(GETPOST('puissance_installee_kwc', 'alphanohtml'));
+	}
 	$object->puissance_injection_kva = (float) price2num(GETPOST('puissance_injection_kva', 'alphanohtml'));
 	$object->prm = GETPOST('prm', 'alphanohtml');
 	$object->site_name_snapshot = GETPOST('site_name_snapshot', 'alphanohtml');
@@ -377,6 +388,10 @@ if ($action === 'updatefield' && $permissiontoadd && $object->id > 0) {
 			break;
 
 		case 'puissance_installee_kwc':
+			$equipmentService = new RaccordementEquipment($db);
+			if ($equipmentService->hasModules((int) $object->id)) {
+				accessforbidden($langs->trans('InstalledPowerDerivedFromModules'));
+			}
 			$object->puissance_installee_kwc = (float) price2num(GETPOST('fieldvalue', 'alphanohtml'));
 			break;
 
@@ -425,35 +440,59 @@ if ($action === 'updatefield' && $permissiontoadd && $object->id > 0) {
 }
 
 if (isset($statusActions[$action]) && $object->id > 0) {
+	$transitionError = false;
 	$permissionName = $statusActions[$action]['permission'];
 	if (!procedurespvCanDo($user, 'raccordement', $permissionName)) {
 		accessforbidden();
 	}
+	if (!in_array((int) $object->status, $statusActions[$action]['from'], true)) {
+		accessforbidden($langs->trans('InvalidStatusTransition'));
+	}
+	if ($action === 'validate_collecte') {
+		$latestLink = new PublicLink($db);
+		if ($latestLink->fetchLatestForRaccordement((int) $object->id, PublicLink::TYPE_COLLECTE_RACCORDEMENT) <= 0) {
+			accessforbidden($langs->trans('CollectionRevisionMissing'));
+		}
+		$collectionService = new CollectionService($db);
+		if (!$collectionService->canValidateCollection((int) $object->id, (int) $latestLink->id)) {
+			setEventMessages($langs->trans($collectionService->error), null, 'errors');
+			$action = '';
+			$transitionError = true;
+		}
+	}
 
-	if ($action === 'deposit_enedis' && empty($object->date_depot_enedis)) {
+	if ($action !== '' && $action === 'deposit_enedis' && empty($object->date_depot_enedis)) {
 		$object->date_depot_enedis = dol_now();
 	}
 	if ($action === 'mes_done') {
 		$object->date_mes = dol_now();
 	}
 
-	$result = $object->setStatus($user, (int) $statusActions[$action]['status']);
+	$statusAction = $action;
+	$result = $statusAction !== '' ? $object->setStatus($user, (int) $statusActions[$statusAction]['status']) : 0;
 	if ($result > 0) {
-		setEventMessages($langs->trans($statusActions[$action]['message']), null, 'mesgs');
+		procedurespvCreateAgendaEvent($object, $user, $statusActions[$statusAction]['message']);
+		setEventMessages($langs->trans($statusActions[$statusAction]['message']), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($object->error, $object->errors, 'errors');
+	if (!$transitionError) {
+		setEventMessages($object->error, $object->errors, 'errors');
+	}
 }
 
 if ($action === 'freeze_snapshot' && $object->id > 0) {
 	if (!procedurespvCanDo($user, 'raccordement', 'freeze_snapshot')) {
 		accessforbidden();
 	}
+	if (!empty($object->date_snapshot)) {
+		accessforbidden($langs->trans('SnapshotAlreadyFrozen'));
+	}
 
 	$result = $object->freezeSnapshot($user);
 	if ($result > 0) {
+		procedurespvCreateAgendaEvent($object, $user, 'SnapshotFrozen');
 		setEventMessages($langs->trans('SnapshotFrozen'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id);
 		exit;
@@ -471,6 +510,8 @@ if ($action === 'create' || $action === 'edit') {
 	}
 
 	$formAction = $action === 'create' ? 'add' : 'update';
+	$equipmentService = new RaccordementEquipment($db);
+	$installedPowerIsDerived = (int) $object->id > 0 && $equipmentService->hasModules((int) $object->id);
 	print load_fiche_titre($action === 'create' ? $langs->trans('NewRaccordement') : $langs->trans('EditRaccordement'), '', $object->picto);
 
 	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
@@ -543,7 +584,7 @@ if ($action === 'create' || $action === 'edit') {
 	print ajax_combobox('type_exploitation');
 	print '</td></tr>';
 
-	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc"'.($installedPowerIsDerived ? ' readonly' : '').' value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> <span class="opacitymedium">kWc</span>'.($installedPowerIsDerived ? ' <span class="opacitymedium">'.$langs->trans('InstalledPowerDerivedFromModules').'</span>' : '').'</td></tr>';
 	print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag((string) $object->puissance_injection_kva).'"> <span class="opacitymedium">kVA</span></td></tr>';
 	print '<tr><td>'.$langs->trans('Responsible').'</td><td><input type="number" class="flat width100" name="fk_user_resp" value="'.((int) $object->fk_user_resp).'"></td></tr>';
 	$useWysiwygPublic = isModEnabled('fckeditor') && getDolGlobalInt('FCKEDITOR_ENABLE_NOTE_PUBLIC') > 0;
@@ -574,6 +615,30 @@ if ($action === 'create' || $action === 'edit') {
 	$linkback = '<a href="'.dol_buildpath('/procedurespv/raccordement/list.php', 1).'">'.$langs->trans('BackToList').'</a>';
 	dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 
+	if ($tab === 'documents') {
+		$uploadDir = procedurespvGetRaccordementUploadDir($object);
+		$urlsource = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&tab=documents';
+		print '<div class="div-table-responsive-no-min">';
+		print $formfile->showdocuments('procedurespv', dol_sanitizeFileName((string) $object->ref), $uploadDir, $urlsource, 0, 0, '', 0, 0, 0, 28, 0, 'entity='.(int) $object->entity, '', '', $langs->defaultlang, '', $object);
+		print '</div>';
+		print dol_get_fiche_end();
+		llxFooter();
+		$db->close();
+		exit;
+	}
+
+	if ($tab === 'agenda') {
+		if (isModEnabled('agenda')) {
+			$formactions->showactions($object, $object->element.'@'.$object->module, (int) $object->fk_soc, 1, 'listactions', getDolGlobalInt('MAIN_SIZE_SHORTLIST_LIMIT', 20));
+		} else {
+			print '<div class="warning">'.$langs->trans('AgendaModuleDisabled').'</div>';
+		}
+		print dol_get_fiche_end();
+		llxFooter();
+		$db->close();
+		exit;
+	}
+
 	if ($tab !== 'card') {
 		print '<div class="opacitymedium">'.$langs->trans('TabPlannedInNextBatch').'</div>';
 		print dol_get_fiche_end();
@@ -585,6 +650,8 @@ if ($action === 'create' || $action === 'edit') {
 	$relanceFetcher = new Relance($db);
 	$relanceSummary = $relanceFetcher->getSummaryByRaccordement((int) $object->id);
 	$canEditDraftFields = $permissiontoadd && (int) $object->status === 0;
+	$equipmentService = new RaccordementEquipment($db);
+	$installedPowerIsDerived = $equipmentService->hasModules((int) $object->id);
 	$fieldToEdit = ($action === 'editfield') ? preg_replace('/[^a-zA-Z0-9_]/', '', GETPOST('field', 'nohtml')) : '';
 	if (!$canEditDraftFields || !array_key_exists($fieldToEdit, procedurespvGetDraftEditableFields())) {
 		$fieldToEdit = '';
@@ -627,7 +694,7 @@ if ($action === 'create' || $action === 'edit') {
 	print '<table class="border centpercent tableforfield">';
 	$exploitationLabelKey = isset($exploitationTypeOptions[(string) $object->type_exploitation]) ? $exploitationTypeOptions[(string) $object->type_exploitation] : '';
 	procedurespvPrintDraftEditableRow($object, 'type_exploitation', $langs->trans('ExploitationType'), ($exploitationLabelKey !== '' ? $langs->trans($exploitationLabelKey) : dol_escape_htmltag((string) $object->type_exploitation)), procedurespvRenderDraftFieldInput($object, 'type_exploitation', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
-	procedurespvPrintDraftEditableRow($object, 'puissance_installee_kwc', $langs->trans('InstalledPowerKwc'), price((float) $object->puissance_installee_kwc).' kWc', procedurespvRenderDraftFieldInput($object, 'puissance_installee_kwc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'puissance_installee_kwc', $langs->trans('InstalledPowerKwc'), price((float) $object->puissance_installee_kwc).' kWc'.($installedPowerIsDerived ? ' <span class="opacitymedium">'.$langs->trans('InstalledPowerDerivedFromModules').'</span>' : ''), procedurespvRenderDraftFieldInput($object, 'puissance_installee_kwc', $form, $formproject, $centralePVAdapter), $canEditDraftFields && !$installedPowerIsDerived, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'puissance_injection_kva', $langs->trans('InjectionPowerKva'), price((float) $object->puissance_injection_kva).' kVA', procedurespvRenderDraftFieldInput($object, 'puissance_injection_kva', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'ref_enedis', $langs->trans('EnedisReference'), dol_escape_htmltag((string) $object->ref_enedis), procedurespvRenderDraftFieldInput($object, 'ref_enedis', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	$responsibleValue = ((int) $object->fk_user_resp > 0 ? '<a href="'.DOL_URL_ROOT.'/user/card.php?id='.((int) $object->fk_user_resp).'">'.((int) $object->fk_user_resp).'</a>' : '');
@@ -717,32 +784,62 @@ if ($action === 'create' || $action === 'edit') {
 	}
 	print '</table>';
 
+	print '<br><div class="fichecenter">';
+	print '<div class="fichehalfleft">';
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	$urlsource = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id;
+	print $formfile->showdocuments('procedurespv', dol_sanitizeFileName((string) $object->ref), $uploadDir, $urlsource, 0, 0, '', 0, 0, 0, 28, 0, 'entity='.(int) $object->entity, '', '', $langs->defaultlang, '', $object);
+	print '</div>';
+	print '<div class="fichehalfright">';
+	if (isModEnabled('agenda')) {
+		$formactions->showactions($object, $object->element.'@'.$object->module, (int) $object->fk_soc, 1, '', getDolGlobalInt('MAIN_SIZE_SHORTLIST_LIMIT', 10));
+	}
+	print '</div><div class="clearboth"></div></div>';
+
 	print '<div class="tabsAction">';
 	$token = newToken();
-	if (procedurespvCanDo($user, 'raccordement', 'send_collecte')) {
+	$canValidateCurrentCollection = false;
+	if (procedurespvCanDo($user, 'raccordement', 'validate_collecte') && in_array((int) $object->status, $statusActions['validate_collecte']['from'], true)) {
+		$currentRevision = new PublicLink($db);
+		if ($currentRevision->fetchLatestForRaccordement((int) $object->id, PublicLink::TYPE_COLLECTE_RACCORDEMENT) > 0 && (int) $currentRevision->status === PublicLink::STATUS_SUBMITTED) {
+			$currentCollectionService = new CollectionService($db);
+			$canValidateCurrentCollection = $currentCollectionService->canValidateCollection((int) $object->id, (int) $currentRevision->id);
+		}
+	}
+	if (procedurespvCanDo($user, 'raccordement', 'send_collecte') && in_array((int) $object->status, $statusActions['send_collecte']['from'], true)) {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=send_collecte&token='.$token.'">'.$langs->trans('SendCollecteClientAction').'</a>';
 	}
 	if ($permissiontoadd) {
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mark_collecte_submitted&token='.$token.'">'.$langs->trans('MarkCollecteSubmitted').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=ready_deposit&token='.$token.'">'.$langs->trans('MarkReadyForDeposit').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=deposit_enedis&token='.$token.'">'.$langs->trans('MarkDepositedEnedis').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=instruction_enedis&token='.$token.'">'.$langs->trans('MarkInstructionEnedis').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=close&token='.$token.'">'.$langs->trans('Close').'</a>';
-		print '<a class="butActionDelete" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=cancel&token='.$token.'">'.$langs->trans('CancelObject').'</a>';
+		foreach (array('mark_collecte_submitted' => 'MarkCollecteSubmitted', 'ready_deposit' => 'MarkReadyForDeposit', 'deposit_enedis' => 'MarkDepositedEnedis', 'instruction_enedis' => 'MarkInstructionEnedis', 'close' => 'Close') as $statusAction => $labelKey) {
+			if (in_array((int) $object->status, $statusActions[$statusAction]['from'], true)) {
+				print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action='.$statusAction.'&token='.$token.'">'.$langs->trans($labelKey).'</a>';
+			}
+		}
+		if (in_array((int) $object->status, $statusActions['cancel']['from'], true)) {
+			print '<a class="butActionDelete" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=cancel&token='.$token.'">'.$langs->trans('CancelObject').'</a>';
+		}
 	}
-	if (procedurespvCanDo($user, 'raccordement', 'validate_collecte')) {
+	if ($canValidateCurrentCollection) {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=validate_collecte&token='.$token.'">'.$langs->trans('ValidateCollecte').'</a>';
 	}
-	if (procedurespvCanDo($user, 'raccordement', 'freeze_snapshot')) {
+	if (procedurespvCanDo($user, 'raccordement', 'freeze_snapshot') && empty($object->date_snapshot)) {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=freeze_snapshot&token='.$token.'">'.$langs->trans('FreezeSnapshot').'</a>';
 	}
 	if (procedurespvCanDo($user, 'raccordement', 'manage_convention')) {
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_received&token='.$token.'">'.$langs->trans('MarkConventionReceived').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_signed&token='.$token.'">'.$langs->trans('MarkConventionSigned').'</a>';
+		if (in_array((int) $object->status, $statusActions['convention_received']['from'], true)) {
+			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_received&token='.$token.'">'.$langs->trans('MarkConventionReceived').'</a>';
+		}
+		if (in_array((int) $object->status, $statusActions['convention_signed']['from'], true)) {
+			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_signed&token='.$token.'">'.$langs->trans('MarkConventionSigned').'</a>';
+		}
 	}
 	if (procedurespvCanDo($user, 'raccordement', 'manage_mes')) {
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_requested&token='.$token.'">'.$langs->trans('MarkMESRequested').'</a>';
-		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_done&token='.$token.'">'.$langs->trans('MarkMESDone').'</a>';
+		if (in_array((int) $object->status, $statusActions['mes_requested']['from'], true)) {
+			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_requested&token='.$token.'">'.$langs->trans('MarkMESRequested').'</a>';
+		}
+		if (in_array((int) $object->status, $statusActions['mes_done']['from'], true)) {
+			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_done&token='.$token.'">'.$langs->trans('MarkMESDone').'</a>';
+		}
 	}
 	if ($permissiontodelete) {
 		print '<span class="butActionRefused classfortooltip" title="'.$langs->trans('FeatureNotYetActive').'">'.$langs->trans('Delete').'</span>';

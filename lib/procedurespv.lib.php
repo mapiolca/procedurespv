@@ -133,7 +133,7 @@ function procedurespvGetRaccordementUploadDir($object)
 	require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 
 	$uploadDir = function_exists('getMultidirOutput') ? getMultidirOutput($object, 'procedurespv', 1) : '';
-	if ($uploadDir !== '') {
+	if ($uploadDir !== '' && strpos($uploadDir, 'error-') !== 0) {
 		return $uploadDir;
 	}
 
@@ -150,7 +150,147 @@ function procedurespvGetRaccordementUploadDir($object)
 		return '';
 	}
 
-	return $moduleOutput.'/'.$object->element.'/'.dol_sanitizeFileName((string) $object->ref);
+	return $moduleOutput.'/'.dol_sanitizeFileName((string) $object->ref);
+}
+
+/** @param Raccordement $object Parent object @param string $filename Filename @return string */
+function procedurespvGetRaccordementDocumentRelativePath($object, $filename)
+{
+	return dol_sanitizeFileName((string) $object->ref).'/'.dol_sanitizeFileName($filename);
+}
+
+/** @param Raccordement $object Parent object @param string $filename Filename @param bool $attachment Force download @return string */
+function procedurespvGetRaccordementDocumentUrl($object, $filename, $attachment = false)
+{
+	$url = DOL_URL_ROOT.'/document.php?modulepart=procedurespv&file='.urlencode(procedurespvGetRaccordementDocumentRelativePath($object, $filename));
+	if ($attachment) {
+		$url .= '&attachment=1';
+	}
+	if (!empty($object->entity)) {
+		$url .= '&entity='.((int) $object->entity);
+	}
+	return $url;
+}
+
+/**
+ * Render a native preview/download link for a raccordement document.
+ *
+ * @param Raccordement $object Parent object
+ * @param string $filename Filename
+ * @param bool $withDownload Add explicit download icon
+ * @return string
+ */
+function procedurespvRenderRaccordementDocumentLink($object, $filename, $withDownload = true)
+{
+	global $langs;
+
+	if ($filename === '') {
+		return '';
+	}
+	$relativePath = procedurespvGetRaccordementDocumentRelativePath($object, $filename);
+	$previewData = getAdvancedPreviewUrl('procedurespv', $relativePath, 1, '&entity='.(int) $object->entity);
+	$previewUrl = is_array($previewData) && !empty($previewData['url']) ? (string) $previewData['url'] : procedurespvGetRaccordementDocumentUrl($object, $filename);
+	$previewMime = is_array($previewData) && !empty($previewData['mime']) ? (string) $previewData['mime'] : dol_mimetype($filename);
+	$html = '<a class="documentpreview" mime="'.dol_escape_htmltag($previewMime).'" target="_blank" rel="noopener" href="'.dol_escape_htmltag($previewUrl).'">'.dol_escape_htmltag($filename).'</a>';
+	if ($withDownload) {
+		$html .= ' <a href="'.dol_escape_htmltag(procedurespvGetRaccordementDocumentUrl($object, $filename, true)).'">'.img_picto($langs->trans('Download'), 'download').'</a>';
+	}
+
+	return $html;
+}
+
+/**
+ * Store an uploaded file in the native raccordement document directory.
+ *
+ * @param string $fieldName Upload field
+ * @param Raccordement $object Parent object
+ * @param string $code Document code
+ * @param string $label Label
+ * @param string $origin Origin
+ * @param int $required Required flag
+ * @param int $fkPublicLink Revision id
+ * @return array{result:int,filename:string,error:string}
+ */
+function procedurespvStoreRaccordementUpload($fieldName, $object, $code, $label, $origin = 'internal', $required = 0, $fkPublicLink = 0)
+{
+	global $db;
+	if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
+		return array('result' => 0, 'filename' => '', 'error' => '');
+	}
+	require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
+	require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
+	$file = $_FILES[$fieldName];
+	$errorCode = isset($file['error']) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
+	$originalName = isset($file['name']) ? (string) $file['name'] : '';
+	$tmpName = isset($file['tmp_name']) ? (string) $file['tmp_name'] : '';
+	$fileSize = isset($file['size']) ? (int) $file['size'] : 0;
+	$extension = strtolower((string) pathinfo($originalName, PATHINFO_EXTENSION));
+	$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
+	$maxSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	if ($errorCode !== UPLOAD_ERR_OK || $originalName === '' || $tmpName === '' || $uploadDir === '' || dol_mkdir($uploadDir) < 0) {
+		return array('result' => -1, 'filename' => '', 'error' => 'UploadDirectoryUnavailable');
+	}
+	if ($fileSize <= 0 || $fileSize > $maxSize) {
+		return array('result' => -1, 'filename' => '', 'error' => 'UploadInvalidSize');
+	}
+	if ($extension === '' || !in_array($extension, $allowedExtensions, true)) {
+		return array('result' => -1, 'filename' => '', 'error' => 'UploadInvalidExtension');
+	}
+	$storedFilename = $code.'_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S').'_'.dol_sanitizeFileName($originalName);
+	$result = dol_move_uploaded_file($tmpName, $uploadDir.'/'.$storedFilename, 1, 0, $errorCode, 0, $fieldName, $uploadDir);
+	if (!is_int($result) || $result <= 0) {
+		return array('result' => -1, 'filename' => '', 'error' => is_string($result) && $result !== '' ? $result : 'UploadMoveFailed');
+	}
+	if ($result === 2) {
+		$storedFilename .= '.noexe';
+	}
+	$piece = new Piece($db);
+	$pieceId = $piece->createOrUpdateUploaded($object, $code, $label, $origin, $uploadDir, $storedFilename, $required, $fkPublicLink);
+	if ($pieceId <= 0) {
+		dol_delete_file($uploadDir.'/'.$storedFilename);
+		return array('result' => -1, 'filename' => '', 'error' => $piece->error);
+	}
+	return array('result' => $pieceId, 'filename' => $storedFilename, 'error' => '');
+}
+
+/**
+ * Create one native Agenda event for a business update.
+ *
+ * CRUD triggers are exposed for integrations, but are not registered for
+ * automatic Agenda creation, so this remains the single event creation path.
+ *
+ * @param Raccordement $object Parent object
+ * @param User $user Acting user
+ * @param string $label Translation key or readable label
+ * @param string $note Event details
+ * @return int Event id or 0
+ */
+function procedurespvCreateAgendaEvent($object, $user, $label, $note = '')
+{
+	global $db, $langs;
+	if (!isModEnabled('agenda') || !is_readable(DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php')) {
+		return 0;
+	}
+	require_once DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php';
+	$actioncomm = new ActionComm($db);
+	$actioncomm->type_code = 'AC_OTH_AUTO';
+	$translated = $langs->trans($label);
+	$actioncomm->label = ($translated !== $label ? $translated : $label).' - '.$object->ref;
+	$actioncomm->datep = dol_now();
+	$actioncomm->datef = dol_now();
+	$actioncomm->percentage = 100;
+	$actioncomm->elementtype = $object->element.'@procedurespv';
+	$actioncomm->fk_element = (int) $object->id;
+	$actioncomm->socid = (int) $object->fk_soc;
+	$actioncomm->fk_project = (int) $object->fk_project;
+	$actioncomm->note_private = $note;
+	$result = $actioncomm->create($user);
+	if ($result < 0) {
+		dol_syslog('procedurespvCreateAgendaEvent failed: '.$actioncomm->error, LOG_WARNING);
+		return 0;
+	}
+	return (int) $result;
 }
 
 /**

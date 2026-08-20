@@ -143,3 +143,42 @@
 
 - `fk_actioncomm` est renseigné lorsque l'événement Agenda est créé.
 - Relancer l'action envoyée sur une relance déjà liée ne doit pas créer un doublon Agenda.
+
+## Scénario 6 - Révision, mandat et pièces justificatives
+
+1. Générer une collecte et vérifier que toutes les pièces attendues sont pré-listées.
+2. Signer puis soumettre sans une pièce obligatoire : elle doit passer à `Manquant`.
+3. Déposer la pièce côté interne : elle passe à `À contrôler` et son aperçu/téléchargement est disponible.
+4. Refuser puis remplacer la pièce, avant de la valider avec le mandat.
+5. Valider la collecte, puis générer une nouvelle révision et vérifier le préremplissage complet des champs et Select2.
+
+Résultats attendus : l’historique précédent est conservé, les actions impossibles disparaissent et restent refusées côté serveur, et une collecte n’est validable qu’avec le dernier mandat et toutes les pièces obligatoires valides.
+
+## Scénario 7 - Bénéficiaire et SIRET
+
+1. Saisir le SIRET d’un Tiers accessible et vérifier le préremplissage de ses coordonnées et de son Contact.
+2. Modifier une coordonnée dans la collecte puis soumettre.
+3. Vérifier la mise à jour du Tiers et du Contact dans la bonne entité.
+4. Recommencer avec un SIRET inconnu et vérifier la création du Tiers.
+
+Résultats attendus : la synchronisation est atomique, respecte les droits et ne laisse aucune création partielle en cas d’erreur.
+
+## Scénario 8 - Équipements PowerPlantPV
+
+1. Sélectionner deux modèles d’onduleurs et deux modèles de modules, avec des quantités différentes.
+2. Vérifier les puissances unitaires, les totaux de ligne et les agrégats affichés en direct.
+3. Enregistrer et comparer les totaux serveur : somme des quantités, kVA des onduleurs et kWc des modules.
+4. Tester un produit sans puissance avec puis sans les droits de modification PowerPlantPV.
+5. Modifier ensuite le catalogue : l’instantané existant ne change pas ; après suppression/réajout, la valeur actuelle est reprise.
+6. Tester un produit d’une mauvaise catégorie et un produit d’une entité inaccessible.
+
+Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, les caractéristiques manquantes sont corrigées uniquement via les API PowerPlantPV et `puissance_injection_kva` reste indépendante.
+
+## Scénario 9 - Documents, Agenda et Multicompany
+
+1. Déposer chaque document technique et justificatif, puis contrôler sa présence dans `Fichiers joints`.
+2. Vérifier les liens d’aperçu et de téléchargement avec un utilisateur en lecture seule.
+3. Contrôler l’unicité des événements Agenda après dépôt, validation/refus, soumission, synchronisation et modification des équipements.
+4. Refaire la recette sur un raccordement appartenant à une seconde entité puis consulté par partage.
+
+Résultats attendus : les fichiers restent dans le répertoire de l’entité propriétaire, aucun événement n’est dupliqué et les droits d’écriture restent distincts du droit de lecture documentaire.

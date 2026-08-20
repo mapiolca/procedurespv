@@ -33,47 +33,6 @@ function procedurespvMesReadDateTimeFromPost($prefix)
 	return dol_mktime($hour, $min, 0, $month, $day, $year);
 }
 
-/**
- * Create a native agenda event when Agenda is available.
- *
- * @param DoliDB $db Database handler
- * @param User $user User creating the event
- * @param Raccordement $object Raccordement object
- * @return void
- */
-function procedurespvMesCreateAgendaEvent($db, $user, $object)
-{
-	global $langs;
-
-	if (!function_exists('isModEnabled') || !isModEnabled('agenda')) {
-		return;
-	}
-
-	$actionCommFile = DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php';
-	if (!file_exists($actionCommFile)) {
-		return;
-	}
-
-	require_once $actionCommFile;
-	if (!class_exists('ActionComm')) {
-		return;
-	}
-
-	$actioncomm = new ActionComm($db);
-	$actioncomm->type_code = 'AC_OTH_AUTO';
-	$actioncomm->label = $langs->trans('MESAgendaEventLabel').' '.$object->ref;
-	$actioncomm->datep = dol_now();
-	$actioncomm->datef = dol_now();
-	$actioncomm->percentage = 100;
-	$actioncomm->elementtype = $object->element.'@procedurespv';
-	$actioncomm->fk_element = (int) $object->id;
-	$actioncomm->note_private = $langs->trans('MESAgendaEventNote');
-	$result = $actioncomm->create($user);
-	if ($result < 0) {
-		dol_syslog('procedurespvMesCreateAgendaEvent failed: '.$actioncomm->error, LOG_WARNING);
-	}
-}
-
 $langs->loadLangs(array('procedurespv@procedurespv'));
 
 $id = GETPOSTINT('id');
@@ -95,7 +54,17 @@ if (!$permissiontoread) {
 	accessforbidden();
 }
 
-$sensitiveActions = array('save', 'set_required', 'set_not_required', 'mark_to_request', 'mark_requested', 'mark_planned', 'mark_done', 'mark_blocked', 'mark_canceled');
+$mesTransitions = array(
+	'set_required' => (int) $object->mes_required !== 1 && (int) $object->mes_status !== 4,
+	'set_not_required' => (int) $object->mes_required !== 0 && (int) $object->mes_status !== 4,
+	'mark_to_request' => (int) $object->mes_required === 1 && in_array((int) $object->mes_status, array(0, 5, 6), true),
+	'mark_requested' => (int) $object->mes_required === 1 && (int) $object->mes_status === 1,
+	'mark_planned' => (int) $object->mes_required === 1 && (int) $object->mes_status === 2,
+	'mark_done' => (int) $object->mes_required === 1 && in_array((int) $object->mes_status, array(2, 3), true),
+	'mark_blocked' => (int) $object->mes_required === 1 && in_array((int) $object->mes_status, array(1, 2, 3), true),
+	'mark_canceled' => (int) $object->mes_required === 1 && in_array((int) $object->mes_status, array(1, 2, 3, 5), true),
+);
+$sensitiveActions = array_merge(array('save'), array_keys($mesTransitions));
 if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
@@ -105,18 +74,20 @@ if (in_array($action, $sensitiveActions, true)) {
 		accessforbidden();
 	}
 
-	$object->mes_required = GETPOSTINT('mes_required');
-	$object->mes_status = GETPOSTINT('mes_status');
-	$object->date_demande_mes = procedurespvMesReadDateTimeFromPost('date_demande_mes');
-	$object->date_previsionnelle_mes = procedurespvMesReadDateTimeFromPost('date_previsionnelle_mes');
-	$object->date_reelle_mes = procedurespvMesReadDateTimeFromPost('date_reelle_mes');
-	$object->consuel_recu = GETPOSTINT('consuel_recu');
-	$object->date_consuel = procedurespvMesReadDateTimeFromPost('date_consuel');
-	$object->ref_consuel = GETPOST('ref_consuel', 'alphanohtml');
-	$object->injection_autorisee = GETPOSTINT('injection_autorisee');
-	$object->date_autorisation_injection = procedurespvMesReadDateTimeFromPost('date_autorisation_injection');
-	$object->ref_intervention_enedis = GETPOST('ref_intervention_enedis', 'alphanohtml');
-	$object->commentaire_mes = GETPOST('commentaire_mes', 'restricthtml');
+	if ($action === 'save') {
+		$object->date_demande_mes = procedurespvMesReadDateTimeFromPost('date_demande_mes');
+		$object->date_previsionnelle_mes = procedurespvMesReadDateTimeFromPost('date_previsionnelle_mes');
+		$object->date_reelle_mes = procedurespvMesReadDateTimeFromPost('date_reelle_mes');
+		$object->consuel_recu = GETPOSTINT('consuel_recu');
+		$object->date_consuel = procedurespvMesReadDateTimeFromPost('date_consuel');
+		$object->ref_consuel = GETPOST('ref_consuel', 'alphanohtml');
+		$object->injection_autorisee = GETPOSTINT('injection_autorisee');
+		$object->date_autorisation_injection = procedurespvMesReadDateTimeFromPost('date_autorisation_injection');
+		$object->ref_intervention_enedis = GETPOST('ref_intervention_enedis', 'alphanohtml');
+		$object->commentaire_mes = GETPOST('commentaire_mes', 'restricthtml');
+	} elseif (empty($mesTransitions[$action])) {
+		accessforbidden($langs->trans('InvalidStatusTransition'));
+	}
 
 	if ($action === 'set_required') {
 		$object->mes_required = 1;
@@ -164,9 +135,7 @@ if (in_array($action, $sensitiveActions, true)) {
 	$object->context['changed_fields'] = array('mes_required', 'mes_status', 'date_mes');
 	$result = $object->update($user);
 	if ($result > 0) {
-		if ($action === 'mark_done') {
-			procedurespvMesCreateAgendaEvent($db, $user, $object);
-		}
+		procedurespvCreateAgendaEvent($object, $user, 'AgendaMesUpdated');
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/mes.php', 1).'?id='.(int) $object->id);
 		exit;
@@ -190,17 +159,10 @@ print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="action" value="save">';
 
 print '<table class="border centpercent tableforfield">';
-print '<tr><td class="titlefield">'.$langs->trans('MESRequired').'</td><td><select class="flat minwidth200" name="mes_required" id="mes_required">';
-foreach (array(0 => 'No', 1 => 'Yes') as $value => $labelKey) {
-	print '<option value="'.((int) $value).'"'.((int) $object->mes_required === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-}
-print '</select>'.ajax_combobox('mes_required').'</td></tr>';
-print '<tr><td>'.$langs->trans('MESStatus').'</td><td><select class="flat minwidth250" name="mes_status" id="mes_status">';
+print '<tr><td class="titlefield">'.$langs->trans('MESRequired').'</td><td>'.$langs->trans((int) $object->mes_required === 1 ? 'Yes' : 'No').'</td></tr>';
 $statuses = array(0 => 'MESStatusNotRequested', 1 => 'MESStatusToRequest', 2 => 'MESStatusRequested', 3 => 'MESStatusPlanned', 4 => 'MESStatusDone', 5 => 'MESStatusBlocked', 6 => 'MESStatusCanceled');
-foreach ($statuses as $value => $labelKey) {
-	print '<option value="'.((int) $value).'"'.((int) $object->mes_status === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-}
-print '</select>'.ajax_combobox('mes_status').'</td></tr>';
+$mesStatusTypes = array(0 => 'status0', 1 => 'status1', 2 => 'status4', 3 => 'status4', 4 => 'status5', 5 => 'status8', 6 => 'status8');
+print '<tr><td>'.$langs->trans('MESStatus').'</td><td>'.dolGetStatus($langs->trans($statuses[(int) $object->mes_status] ?? 'MESStatusNotRequested'), '', '', $mesStatusTypes[(int) $object->mes_status] ?? 'status0', 6).'</td></tr>';
 print '<tr><td>'.$langs->trans('MESRequestDate').'</td><td>';
 $form->selectDate($object->date_demande_mes ? (int) $object->date_demande_mes : -1, 'date_demande_mes', 1, 1, 1, '', 1, 1);
 print '</td></tr>';
@@ -232,14 +194,22 @@ print '<div class="tabsAction">';
 if ($permissiontowrite) {
 	$baseUrl = dol_buildpath('/procedurespv/raccordement/mes.php', 1).'?id='.(int) $object->id;
 	$token = newToken();
-	print '<a class="butAction" href="'.$baseUrl.'&action=set_required&token='.$token.'">'.$langs->trans('SetMESRequired').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=set_not_required&token='.$token.'">'.$langs->trans('SetMESNotRequired').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_to_request&token='.$token.'">'.$langs->trans('MarkMESToRequest').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_requested&token='.$token.'">'.$langs->trans('MarkMESRequested').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_planned&token='.$token.'">'.$langs->trans('MarkMESPlanned').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_done&token='.$token.'">'.$langs->trans('MarkMESDone').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_blocked&token='.$token.'">'.$langs->trans('MarkMESBlocked').'</a>';
-	print '<a class="butActionDelete" href="'.$baseUrl.'&action=mark_canceled&token='.$token.'">'.$langs->trans('MarkMESCanceled').'</a>';
+	$mesActionLabels = array(
+		'set_required' => 'SetMESRequired',
+		'set_not_required' => 'SetMESNotRequired',
+		'mark_to_request' => 'MarkMESToRequest',
+		'mark_requested' => 'MarkMESRequested',
+		'mark_planned' => 'MarkMESPlanned',
+		'mark_done' => 'MarkMESDone',
+		'mark_blocked' => 'MarkMESBlocked',
+		'mark_canceled' => 'MarkMESCanceled',
+	);
+	foreach ($mesActionLabels as $mesAction => $labelKey) {
+		if (!empty($mesTransitions[$mesAction])) {
+			$buttonClass = $mesAction === 'mark_canceled' ? 'butActionDelete' : 'butAction';
+			print '<a class="'.$buttonClass.'" href="'.$baseUrl.'&action='.$mesAction.'&token='.$token.'">'.$langs->trans($labelKey).'</a>';
+		}
+	}
 }
 print '</div>';
 

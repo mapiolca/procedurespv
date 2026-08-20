@@ -205,6 +205,11 @@ class Convention
 		if ((int) $this->id <= 0) {
 			return -1;
 		}
+		if (!$this->canTransitionTo((int) $status)) {
+			$this->error = 'InvalidStatusTransition';
+			$this->errors[] = $this->error;
+			return -1;
+		}
 
 		$now = dol_now();
 		$sql = 'UPDATE '.MAIN_DB_PREFIX.'pvproc_convention SET status = '.((int) $status);
@@ -235,6 +240,59 @@ class Convention
 		$this->status = (int) $status;
 
 		return 1;
+	}
+
+	/**
+	 * Test whether a workflow transition is currently available.
+	 *
+	 * @param int $status Target status
+	 * @return bool
+	 */
+	public function canTransitionTo($status)
+	{
+		$allowedFrom = array(
+			self::STATUS_RECEIVED => array(self::STATUS_NOT_RECEIVED),
+			self::STATUS_SENT_FOR_SIGNATURE => array(self::STATUS_RECEIVED, self::STATUS_TO_CONTROL, self::STATUS_TO_SIGN),
+			self::STATUS_SIGNED => array(self::STATUS_SENT_FOR_SIGNATURE),
+			self::STATUS_RETURNED_ENEDIS => array(self::STATUS_SIGNED),
+			self::STATUS_VALIDATED => array(self::STATUS_RETURNED_ENEDIS),
+			self::STATUS_OBSOLETE => array(
+				self::STATUS_NOT_RECEIVED,
+				self::STATUS_RECEIVED,
+				self::STATUS_TO_CONTROL,
+				self::STATUS_TO_SIGN,
+				self::STATUS_SENT_FOR_SIGNATURE,
+				self::STATUS_SIGNED,
+				self::STATUS_RETURNED_ENEDIS,
+			),
+		);
+
+		return isset($allowedFrom[(int) $status]) && in_array((int) $this->status, $allowedFrom[(int) $status], true);
+	}
+
+	/**
+	 * Return native Dolibarr status badge.
+	 *
+	 * @param int $mode Display mode
+	 * @return string
+	 */
+	public function getLibStatut($mode = 5)
+	{
+		global $langs;
+
+		$statusTypes = array(
+			self::STATUS_NOT_RECEIVED => 0,
+			self::STATUS_RECEIVED => 1,
+			self::STATUS_TO_CONTROL => 3,
+			self::STATUS_TO_SIGN => 3,
+			self::STATUS_SENT_FOR_SIGNATURE => 3,
+			self::STATUS_SIGNED => 4,
+			self::STATUS_RETURNED_ENEDIS => 1,
+			self::STATUS_VALIDATED => 4,
+			self::STATUS_OBSOLETE => 8,
+		);
+
+		return dolGetStatus($langs->trans($this->getStatusLabelKey()), '', '', 'status'.($statusTypes[(int) $this->status] ?? 0), $mode);
 	}
 
 	/**

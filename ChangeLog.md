@@ -36,3 +36,11 @@
 - Alignement de la section « Informations client » sur les quatre statuts ENEDIS, avec coordonnées communes, champs conditionnels entreprise/collectivité/administration et composants de sélection natifs Dolibarr.
 - Chargement des traductions natives Dolibarr pour les libellés « Pays » et « Tél. portable » du formulaire public.
 - Adaptation responsive de l’onglet Collecte client avec défilement horizontal natif des tableaux et troncature des hash PDF à 15 caractères.
+- Ajout des révisions de collecte rattachant mandats, soumissions, valeurs préremplies et pièces justificatives à chaque lien public.
+- Ajout du cycle complet des pièces justificatives : pré-listage, états natifs, dépôt interne/public, aperçu, téléchargement, validation et refus.
+- Synchronisation transactionnelle du bénéficiaire avec les Tiers et Contacts Dolibarr à partir du SIRET, dans l’entité du raccordement.
+- Intégration de tous les fichiers collectés et générés dans le répertoire documentaire Multicompany et l’onglet natif `Fichiers joints`.
+- Ajout d’une table normalisée des onduleurs et modules sélectionnés depuis PowerPlantPV, avec quantités, instantanés VA/Wc et agrégats recalculés côté serveur.
+- Ajout de la saisie contrôlée des puissances techniques manquantes via les API publiques PowerPlantPV, sans modification directe de son schéma.
+- Verrouillage serveur et masquage des actions devenues incohérentes avec les statuts courants des collectes, mandats, pièces, conventions et relances.
+- Généralisation des badges de statut Dolibarr natifs et ajout de la fonctionnalité conditionnelle PowerPlantPV dans l’onglet Compatibilité.

@@ -89,7 +89,9 @@ if (in_array($action, $sensitiveActions, true) && !$permissiontowrite) {
 
 if ($action === 'add_convention') {
 	$convention = new Convention($db);
-	$result = $convention->create($object, procedurespvConventionReadPayload());
+	$payload = procedurespvConventionReadPayload();
+	$payload['status'] = Convention::STATUS_NOT_RECEIVED;
+	$result = $convention->create($object, $payload);
 	if ($result > 0) {
 		setEventMessages($langs->trans('ConventionCreated'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
@@ -106,7 +108,9 @@ if ($action === 'update_convention') {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
 
-	$result = $convention->update(procedurespvConventionReadPayload());
+	$payload = procedurespvConventionReadPayload();
+	$payload['status'] = (int) $convention->status;
+	$result = $convention->update($payload);
 	if ($result > 0) {
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
@@ -117,12 +121,12 @@ if ($action === 'update_convention') {
 }
 
 $statusActions = array(
-	'mark_received' => Convention::STATUS_RECEIVED,
-	'mark_sent_signature' => Convention::STATUS_SENT_FOR_SIGNATURE,
-	'mark_signed' => Convention::STATUS_SIGNED,
-	'mark_returned_enedis' => Convention::STATUS_RETURNED_ENEDIS,
-	'mark_validated' => Convention::STATUS_VALIDATED,
-	'mark_obsolete' => Convention::STATUS_OBSOLETE,
+	'mark_received' => array('status' => Convention::STATUS_RECEIVED, 'label' => 'MarkReceived'),
+	'mark_sent_signature' => array('status' => Convention::STATUS_SENT_FOR_SIGNATURE, 'label' => 'MarkSentSignature'),
+	'mark_signed' => array('status' => Convention::STATUS_SIGNED, 'label' => 'MarkSigned'),
+	'mark_returned_enedis' => array('status' => Convention::STATUS_RETURNED_ENEDIS, 'label' => 'MarkReturnedEnedis'),
+	'mark_validated' => array('status' => Convention::STATUS_VALIDATED, 'label' => 'MarkValidated'),
+	'mark_obsolete' => array('status' => Convention::STATUS_OBSOLETE, 'label' => 'MarkObsolete'),
 );
 if (isset($statusActions[$action])) {
 	$convention = new Convention($db);
@@ -131,7 +135,7 @@ if (isset($statusActions[$action])) {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
 
-	$result = $convention->setStatus((int) $statusActions[$action]);
+	$result = $convention->setStatus((int) $statusActions[$action]['status']);
 	if ($result > 0) {
 		if ($action === 'mark_received' && (int) $object->status < 11) {
 			$object->setStatus($user, 11);
@@ -186,11 +190,7 @@ if ($permissiontowrite) {
 	}
 	print '</select>'.ajax_combobox('type_convention').'</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionReference').'</td><td><input type="text" class="flat minwidth300" name="ref_convention" value="'.dol_escape_htmltag((string) $editedConvention->ref_convention).'"></td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionStatus').'</td><td><select class="flat minwidth250" name="status" id="convention_status">';
-	foreach (Convention::getStatusLabels() as $value => $labelKey) {
-		print '<option value="'.((int) $value).'"'.((int) $editedConvention->status === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-	}
-	print '</select>'.ajax_combobox('convention_status').'</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionStatus').'</td><td>'.$editedConvention->getLibStatut(5).'</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionReceptionDate').'</td><td>';
 	$form->selectDate($editedConvention->date_reception ? (int) $editedConvention->date_reception : -1, 'date_reception', 1, 1, 1, '', 1, 1);
 	print '</td></tr>';
@@ -237,7 +237,7 @@ if (!empty($conventions)) {
 		print '<tr class="oddeven">';
 		print '<td>'.$langs->trans($typeKey).'</td>';
 		print '<td>'.dol_escape_htmltag((string) $convention->ref_convention).'</td>';
-		print '<td class="center"><span class="badge">'.$langs->trans($convention->getStatusLabelKey()).'</span></td>';
+		print '<td class="center">'.$convention->getLibStatut(5).'</td>';
 		print '<td class="center">'.($convention->date_reception ? dol_print_date((int) $convention->date_reception, 'dayhour') : '').'</td>';
 		print '<td class="center">'.($convention->date_signature_client ? dol_print_date((int) $convention->date_signature_client, 'dayhour') : '').'</td>';
 		print '<td>';
@@ -251,12 +251,11 @@ if (!empty($conventions)) {
 		print '<td class="right nowrap">';
 		if ($permissiontowrite) {
 			print '<a class="button button-edit reposition smallpaddingimp" href="'.$baseUrl.'&action=edit">'.$langs->trans('Modify').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_received&token='.$token.'">'.$langs->trans('MarkReceived').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_sent_signature&token='.$token.'">'.$langs->trans('MarkSentSignature').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_signed&token='.$token.'">'.$langs->trans('MarkSigned').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_returned_enedis&token='.$token.'">'.$langs->trans('MarkReturnedEnedis').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_validated&token='.$token.'">'.$langs->trans('MarkValidated').'</a> ';
-			print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action=mark_obsolete&token='.$token.'">'.$langs->trans('MarkObsolete').'</a>';
+			foreach ($statusActions as $actionCode => $actionDefinition) {
+				if ($convention->canTransitionTo((int) $actionDefinition['status'])) {
+					print '<a class="button reposition smallpaddingimp" href="'.$baseUrl.'&action='.$actionCode.'&token='.$token.'">'.$langs->trans($actionDefinition['label']).'</a> ';
+				}
+			}
 		}
 		print '</td>';
 		print '</tr>';

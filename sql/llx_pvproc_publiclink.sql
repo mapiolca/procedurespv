@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_publiclink
 	date_first_access datetime,
 	date_last_access datetime,
 	date_submit datetime,
+	payload longtext,
 	ip_last_access varchar(64),
 	user_agent_last_access varchar(255),
 	nb_access integer DEFAULT 0,
@@ -25,4 +26,3 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_publiclink
 	KEY idx_pvproc_publiclink_status (status),
 	KEY idx_pvproc_publiclink_date_expiration (date_expiration)
 ) ENGINE=innodb;
-

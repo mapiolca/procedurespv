@@ -54,24 +54,42 @@ if (!$permissiontoread) {
 	accessforbidden();
 }
 
-$sensitiveActions = array('save', 'set_required', 'set_not_required', 'mark_sent_client', 'mark_received', 'validate_cardi', 'refuse_cardi', 'send_public_cardi');
+$cardiTransitions = array(
+	'set_required' => !((int) $object->cardi_required === 1) && (int) $object->cardi_status !== 6,
+	'set_not_required' => !((int) $object->cardi_required === 0) && (int) $object->cardi_status !== 6,
+	'mark_sent_client' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(1, 2), true),
+	'mark_received' => (int) $object->cardi_required === 1 && (int) $object->cardi_status === 3,
+	'validate_cardi' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(4, 5), true),
+	'refuse_cardi' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(4, 5), true),
+);
+$sensitiveActions = array_merge(array('save', 'send_public_cardi'), array_keys($cardiTransitions));
 if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
-if (in_array($action, $sensitiveActions, true)) {
+if ($action === 'send_public_cardi') {
+	if (!$permissiontowrite) {
+		accessforbidden();
+	}
+	setEventMessages($langs->trans('CardiPublicFormNotActive'), null, 'warnings');
+	$action = '';
+}
+
+if ($action === 'save' || isset($cardiTransitions[$action])) {
 	if (!$permissiontowrite) {
 		accessforbidden();
 	}
 
-	$object->cardi_required = GETPOSTINT('cardi_required');
-	$object->cardi_status = GETPOSTINT('cardi_status');
-	$object->cardi_date_demande = procedurespvCardiReadDateTimeFromPost('cardi_date_demande');
-	$object->cardi_date_envoi_client = procedurespvCardiReadDateTimeFromPost('cardi_date_envoi_client');
-	$object->cardi_date_retour_client = procedurespvCardiReadDateTimeFromPost('cardi_date_retour_client');
-	$object->cardi_date_validation = procedurespvCardiReadDateTimeFromPost('cardi_date_validation');
-	$object->cardi_document = GETPOST('cardi_document', 'alphanohtml');
-	$object->cardi_commentaire = GETPOST('cardi_commentaire', 'restricthtml');
+	if ($action === 'save') {
+		$object->cardi_date_demande = procedurespvCardiReadDateTimeFromPost('cardi_date_demande');
+		$object->cardi_date_envoi_client = procedurespvCardiReadDateTimeFromPost('cardi_date_envoi_client');
+		$object->cardi_date_retour_client = procedurespvCardiReadDateTimeFromPost('cardi_date_retour_client');
+		$object->cardi_date_validation = procedurespvCardiReadDateTimeFromPost('cardi_date_validation');
+		$object->cardi_document = GETPOST('cardi_document', 'alphanohtml');
+		$object->cardi_commentaire = GETPOST('cardi_commentaire', 'restricthtml');
+	} elseif (empty($cardiTransitions[$action])) {
+		accessforbidden($langs->trans('InvalidStatusTransition'));
+	}
 
 	if ($action === 'set_required') {
 		$object->cardi_required = 1;
@@ -102,16 +120,13 @@ if (in_array($action, $sensitiveActions, true)) {
 	$object->context['changed_fields'] = array('cardi_required', 'cardi_status');
 	$result = $object->update($user);
 	if ($result > 0) {
+		procedurespvCreateAgendaEvent($object, $user, 'AgendaCardiUpdated');
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/cardi.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
 	setEventMessages($object->error, $object->errors, 'errors');
-}
-
-if ($action === 'send_public_cardi') {
-	setEventMessages($langs->trans('CardiPublicFormNotActive'), null, 'warnings');
 }
 
 $form = new Form($db);
@@ -129,17 +144,10 @@ print '<input type="hidden" name="token" value="'.newToken().'">';
 print '<input type="hidden" name="action" value="save">';
 
 print '<table class="border centpercent tableforfield">';
-print '<tr><td class="titlefield">'.$langs->trans('CardiRequired').'</td><td><select class="flat minwidth200" name="cardi_required" id="cardi_required">';
-foreach (array(0 => 'No', 1 => 'Yes', 2 => 'ToDetermine') as $value => $labelKey) {
-	print '<option value="'.((int) $value).'"'.((int) $object->cardi_required === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-}
-print '</select>'.ajax_combobox('cardi_required').'</td></tr>';
-print '<tr><td>'.$langs->trans('CardiStatus').'</td><td><select class="flat minwidth250" name="cardi_status" id="cardi_status">';
+print '<tr><td class="titlefield">'.$langs->trans('CardiRequired').'</td><td>'.$langs->trans(array(0 => 'No', 1 => 'Yes', 2 => 'ToDetermine')[(int) $object->cardi_required] ?? 'ToDetermine').'</td></tr>';
 $statuses = array(0 => 'CardiStatusNotRequired', 1 => 'CardiStatusToPrepare', 2 => 'CardiStatusToSendClient', 3 => 'CardiStatusWaitingClient', 4 => 'CardiStatusReceived', 5 => 'CardiStatusToControl', 6 => 'CardiStatusValidated', 7 => 'CardiStatusNonCompliant');
-foreach ($statuses as $value => $labelKey) {
-	print '<option value="'.((int) $value).'"'.((int) $object->cardi_status === (int) $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-}
-print '</select>'.ajax_combobox('cardi_status').'</td></tr>';
+$cardiStatusTypes = array(0 => 'status0', 1 => 'status1', 2 => 'status1', 3 => 'status4', 4 => 'status4', 5 => 'status4', 6 => 'status5', 7 => 'status8');
+print '<tr><td>'.$langs->trans('CardiStatus').'</td><td>'.dolGetStatus($langs->trans($statuses[(int) $object->cardi_status] ?? 'CardiStatusToDetermine'), '', '', $cardiStatusTypes[(int) $object->cardi_status] ?? 'status0', 6).'</td></tr>';
 print '<tr><td>'.$langs->trans('CardiRequestDate').'</td><td>';
 $form->selectDate($object->cardi_date_demande ? (int) $object->cardi_date_demande : -1, 'cardi_date_demande', 1, 1, 1, '', 1, 1);
 print '</td></tr>';
@@ -165,13 +173,21 @@ print '<div class="tabsAction">';
 if ($permissiontowrite) {
 	$baseUrl = dol_buildpath('/procedurespv/raccordement/cardi.php', 1).'?id='.(int) $object->id;
 	$token = newToken();
-	print '<a class="butAction" href="'.$baseUrl.'&action=set_required&token='.$token.'">'.$langs->trans('SetCardiRequired').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=set_not_required&token='.$token.'">'.$langs->trans('SetCardiNotRequired').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_sent_client&token='.$token.'">'.$langs->trans('MarkSentClient').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=mark_received&token='.$token.'">'.$langs->trans('MarkReceived').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=validate_cardi&token='.$token.'">'.$langs->trans('ValidateCARDi').'</a>';
-	print '<a class="butAction" href="'.$baseUrl.'&action=refuse_cardi&token='.$token.'">'.$langs->trans('RefuseCARDi').'</a>';
-	print '<a class="butActionRefused classfortooltip" title="'.$langs->trans('CardiPublicFormNotActive').'" href="'.$baseUrl.'&action=send_public_cardi&token='.$token.'">'.$langs->trans('SendPublicCardiForm').'</a>';
+	$cardiActionLabels = array(
+		'set_required' => 'SetCardiRequired',
+		'set_not_required' => 'SetCardiNotRequired',
+		'mark_sent_client' => 'MarkSentClient',
+		'mark_received' => 'MarkReceived',
+		'validate_cardi' => 'ValidateCARDi',
+		'refuse_cardi' => 'RefuseCARDi',
+	);
+	foreach ($cardiActionLabels as $cardiAction => $labelKey) {
+		if (!empty($cardiTransitions[$cardiAction])) {
+			$buttonClass = $cardiAction === 'refuse_cardi' ? 'butActionDelete' : 'butAction';
+			print '<a class="'.$buttonClass.'" href="'.$baseUrl.'&action='.$cardiAction.'&token='.$token.'">'.$langs->trans($labelKey).'</a>';
+		}
+	}
+	print '<span class="butActionRefused classfortooltip" title="'.$langs->trans('CardiPublicFormNotActive').'">'.$langs->trans('SendPublicCardiForm').'</span>';
 }
 print '</div>';
 

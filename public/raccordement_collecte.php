@@ -19,9 +19,13 @@ require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/beneficiarysync.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
+require_once DOL_DOCUMENT_ROOT.'/user/class/user.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/lib/company.lib.php';
 
@@ -355,15 +359,42 @@ function procedurespvPublicGetBeneficiaryStatuses()
 }
 
 /**
+ * Resolve the internal workflow user used for native Dolibarr writes from a public link.
+ *
+ * @param DoliDB $db Database handler
+ * @param Raccordement $object Parent object
+ * @param User $fallback Current public user
+ * @return User|null
+ */
+function procedurespvPublicGetWorkflowUser($db, $object, $fallback)
+{
+	if (is_object($fallback) && !empty($fallback->id)) {
+		return $fallback;
+	}
+	foreach (array((int) $object->fk_user_resp, (int) $object->fk_user_author) as $userId) {
+		if ($userId <= 0) {
+			continue;
+		}
+		$workflowUser = new User($db);
+		if ($workflowUser->fetch($userId) > 0 && (int) $workflowUser->statut === 1) {
+			return $workflowUser;
+		}
+	}
+
+	return null;
+}
+
+/**
  * Store one uploaded public piece.
  *
  * @param Translate $langs Language handler
  * @param Raccordement $object Raccordement
  * @param array{code:string,input:string,label:string,help:string,company_only:int,pdl_other_only:int,required:int} $definition Piece definition
+ * @param PublicLink $publicLink Collection revision
  * @param array<int,string> $uploadErrors Upload errors
  * @return int Stored piece id, 0 if no upload, -1 on error
  */
-function procedurespvPublicStoreUploadedPiece($langs, $object, array $definition, array &$uploadErrors)
+function procedurespvPublicStoreUploadedPiece($langs, $object, $publicLink, array $definition, array &$uploadErrors)
 {
 	global $db;
 
@@ -421,14 +452,20 @@ function procedurespvPublicStoreUploadedPiece($langs, $object, array $definition
 	$storedFilename = $definition['code'].'_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S').'_'.dol_sanitizeFileName($originalName);
 	$destPath = $uploadDir.'/'.$storedFilename;
 	$moveResult = dol_move_uploaded_file($tmpName, $destPath, 1, 0, $uploadErrorCode);
-	if ($moveResult <= 0) {
-		$uploadErrors[] = $langs->trans('UploadMoveFailed');
+	if (!is_int($moveResult) || $moveResult <= 0) {
+		$moveError = is_string($moveResult) && $moveResult !== '' ? $moveResult : 'UploadMoveFailed';
+		$uploadErrors[] = $langs->trans($moveError);
 		return -1;
+	}
+	if ($moveResult === 2) {
+		$storedFilename .= '.noexe';
+		$destPath .= '.noexe';
 	}
 
 	$piece = new Piece($db);
-	$uploadedPieceId = $piece->createOrUpdateUploaded($object, $definition['code'], $langs->transnoentitiesnoconv($definition['label']), 'client', $uploadDir, $storedFilename, (int) $definition['required']);
+	$uploadedPieceId = $piece->createOrUpdateUploaded($object, $definition['code'], $langs->transnoentitiesnoconv($definition['label']), 'client', $uploadDir, $storedFilename, (int) $definition['required'], (int) $publicLink->id);
 	if ($uploadedPieceId <= 0) {
+		dol_delete_file($destPath);
 		$uploadErrors[] = $piece->error;
 		return -1;
 	}
@@ -461,13 +498,25 @@ $linkUsable = $linkObjectLoaded && !$linkExpired && $publicLink->isUsable();
 $submittedLinkAvailable = $linkObjectLoaded && !$linkExpired && (int) $publicLink->status === PublicLink::STATUS_SUBMITTED;
 $submissionDone = $submittedLinkAvailable;
 
+if ($action === 'lookup_siret') {
+	header('Content-Type: application/json; charset=UTF-8');
+	if (!$linkUsable) {
+		http_response_code(403);
+		echo json_encode(array('result' => array()));
+		exit;
+	}
+	$synchronizer = new BeneficiarySync($db);
+	echo json_encode(array('result' => $synchronizer->getPrefillBySiret(GETPOST('siret', 'alphanohtml'), (int) $object->entity)), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+	exit;
+}
+
 if ($action === 'download_mandat') {
 	if (!$submittedLinkAvailable) {
 		accessforbidden($langs->trans('PublicLinkUnavailable'));
 	}
 
 	$signature = new Signature($db);
-	$result = $signature->fetchLatestForRaccordementEntity((int) $object->id, (int) $object->entity, Signature::TYPE_MANDAT_ENEDIS);
+	$result = $signature->fetchForRevision((int) $object->id, (int) $publicLink->id);
 	$signatureFile = $result > 0 ? $signature->filepath.'/'.$signature->filename : '';
 	$expectedDir = procedurespvGetRaccordementUploadDir($object);
 	$realSignatureFile = $signatureFile !== '' ? realpath($signatureFile) : false;
@@ -542,6 +591,71 @@ $formSignataireNom = $isSubmitCollecte ? GETPOST('signataire_nom', 'restricthtml
 $formSignataireFonction = $isSubmitCollecte ? GETPOST('signataire_fonction', 'restricthtml') : '';
 $formSignataireEmail = $isSubmitCollecte ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
 $formMandatAcceptance = $isSubmitCollecte ? GETPOST('mandat_acceptance', 'alphanohtml') : 'no';
+
+// A fresh public link is a new revision prefilled from the last submitted revision.
+if (!$isSubmitCollecte) {
+	$prefillPayload = $publicLink->getPayloadArray();
+	if (empty($prefillPayload) && $linkObjectLoaded) {
+		$previousLink = new PublicLink($db);
+		if ($previousLink->fetchLatestSubmittedForRaccordement((int) $object->id, (int) $publicLink->id) > 0) {
+			$prefillPayload = $previousLink->getPayloadArray();
+		}
+	}
+	if (!empty($prefillPayload)) {
+		$companyPayload = isset($prefillPayload['company']) && is_array($prefillPayload['company']) ? $prefillPayload['company'] : array();
+		$publicEntityPayload = isset($prefillPayload['public_entity']) && is_array($prefillPayload['public_entity']) ? $prefillPayload['public_entity'] : array();
+		$contactPayload = isset($prefillPayload['beneficiary_contact']) && is_array($prefillPayload['beneficiary_contact']) ? $prefillPayload['beneficiary_contact'] : array();
+		$buildingPayload = isset($prefillPayload['building']) && is_array($prefillPayload['building']) ? $prefillPayload['building'] : array();
+		$sitePayload = isset($prefillPayload['site']) && is_array($prefillPayload['site']) ? $prefillPayload['site'] : array();
+		$productionSitePayload = isset($prefillPayload['production_site']) && is_array($prefillPayload['production_site']) ? $prefillPayload['production_site'] : array();
+		$productionPayload = isset($prefillPayload['production']) && is_array($prefillPayload['production']) ? $prefillPayload['production'] : array();
+		$formClientType = (string) ($prefillPayload['beneficiary_status'] ?? $prefillPayload['client_type'] ?? $formClientType);
+		$formClientName = (string) ($prefillPayload['client_name'] ?? $formClientName);
+		$formClientSiret = (string) ($prefillPayload['client_siret'] ?? $formClientSiret);
+		$formClientEmail = (string) ($prefillPayload['client_email'] ?? $formClientEmail);
+		$formClientPhone = (string) ($prefillPayload['client_phone'] ?? $formClientPhone);
+		$formCompanyWithoutSiret = !empty($companyPayload['without_siret']) ? 1 : 0;
+		$formCompanyInseeCode = (string) ($companyPayload['insee_code'] ?? '');
+		$formCompanyCapital = (string) ($companyPayload['capital'] ?? '');
+		$formCompanyLegalForm = (int) ($companyPayload['legal_form'] ?? 0);
+		$formPublicEngagementCode = (string) ($publicEntityPayload['engagement_code'] ?? '');
+		$formPublicServiceCode = (string) ($publicEntityPayload['service_code'] ?? '');
+		$formBeneficiaryCivility = (string) ($contactPayload['civility'] ?? '');
+		$formRepresentativeFunction = (string) ($contactPayload['function'] ?? '');
+		$formRepresentativeLastname = (string) ($contactPayload['lastname'] ?? '');
+		$formRepresentativeFirstname = (string) ($contactPayload['firstname'] ?? '');
+		$formRepresentativeMobile = (string) ($contactPayload['mobile'] ?? '');
+		$formBeneficiaryStreetNumber = (string) ($contactPayload['street_number'] ?? '');
+		$formHeadquartersAddress = (string) ($contactPayload['address'] ?? '');
+		$formBeneficiaryAddressComplement = (string) ($contactPayload['address_complement'] ?? '');
+		$formHeadquartersZip = (string) ($contactPayload['zip'] ?? '');
+		$formHeadquartersTown = (string) ($contactPayload['town'] ?? '');
+		$formBeneficiaryTownInseeCode = (string) ($contactPayload['town_insee_code'] ?? '');
+		$formBeneficiaryCountryId = (int) ($contactPayload['country_id'] ?? $formBeneficiaryCountryId);
+		$formBeneficiaryCedex = (string) ($contactPayload['cedex'] ?? '');
+		$formProducerIsBuildingOwner = (string) ($buildingPayload['producer_is_building_owner'] ?? $formProducerIsBuildingOwner);
+		$formBuildingOwnerName = (string) ($buildingPayload['building_owner_name'] ?? '');
+		$formBuildingAlreadyBuilt = (string) ($buildingPayload['building_already_built'] ?? $formBuildingAlreadyBuilt);
+		$formSiteName = (string) ($sitePayload['name'] ?? $formSiteName);
+		$formSiteAddress = (string) ($sitePayload['address'] ?? $formSiteAddress);
+		$formSiteZip = (string) ($sitePayload['zip'] ?? $formSiteZip);
+		$formSiteTown = (string) ($sitePayload['town'] ?? $formSiteTown);
+		$formProductionSiteSiret = (string) ($productionSitePayload['siret'] ?? '');
+		$formSiteAlreadyConnected = (string) ($productionSitePayload['already_connected'] ?? $formSiteAlreadyConnected);
+		$formExistingConnectionType = (string) ($productionSitePayload['existing_connection_type'] ?? $formExistingConnectionType);
+		$formPdlChoice = (string) ($productionSitePayload['pdl_choice'] ?? $formPdlChoice);
+		$formPuissanceSouscrite = (string) ($productionSitePayload['subscribed_power'] ?? $formPuissanceSouscrite);
+		$formPdlContractHolder = (string) ($productionSitePayload['pdl_contract_holder'] ?? '');
+		$formPrm = (string) ($productionPayload['prm'] ?? $formPrm);
+		$formTypeReseau = (string) ($productionPayload['network_type'] ?? $formTypeReseau);
+		$formTypeExploitation = (string) ($productionPayload['exploitation_type'] ?? $formTypeExploitation);
+		$formPuissanceInstallee = (string) ($productionPayload['installed_power_kwc'] ?? $formPuissanceInstallee);
+		$formPuissanceInjection = (string) ($productionPayload['injection_power_kva'] ?? $formPuissanceInjection);
+		$formNoRelatedProjectAttestation = (string) ($productionPayload['no_related_project_attestation'] ?? $formNoRelatedProjectAttestation);
+		$formRelatedProjectReferences = (string) ($productionPayload['related_project_references'] ?? '');
+		$formEnedisRequestType = (string) ($productionPayload['enedis_request_type'] ?? $formEnedisRequestType);
+	}
+}
 
 if ($linkUsable && $action !== 'submit_collecte') {
 	$ip = function_exists('getUserRemoteIP') ? getUserRemoteIP() : (isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '');
@@ -642,22 +756,6 @@ if ($linkUsable && $action === 'submit_collecte') {
 		$signataireFonction = $representativeFunction;
 	}
 
-	foreach (procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice, $siteAlreadyConnected) as $pieceDefinition) {
-		if ((int) $pieceDefinition['company_only'] && $clientType !== 'societe') {
-			continue;
-		}
-		if ((int) $pieceDefinition['pdl_other_only'] && ($siteAlreadyConnected !== 'yes' || $pdlChoice !== 'existing_other_legal_entity')) {
-			continue;
-		}
-		$uploadedPieceId = procedurespvPublicStoreUploadedPiece($langs, $object, $pieceDefinition, $uploadErrors);
-		if ($uploadedPieceId > 0) {
-			$uploadedPieceIds[$pieceDefinition['code']] = $uploadedPieceId;
-		}
-		if ((int) $pieceDefinition['required'] && $uploadedPieceId === 0) {
-			$uploadErrors[] = $langs->trans('RequiredDocumentMissing', $langs->trans($pieceDefinition['label']));
-		}
-	}
-
 	$publicSummary = array(
 		'beneficiary_status' => $clientType,
 		'client_type' => $clientType,
@@ -695,6 +793,12 @@ if ($linkUsable && $action === 'submit_collecte') {
 			'building_owner_name' => $buildingOwnerName,
 			'building_already_built' => $buildingAlreadyBuilt,
 		),
+		'site' => array(
+			'name' => $siteName,
+			'address' => $siteAddress,
+			'zip' => $siteZip,
+			'town' => $siteTown,
+		),
 		'production_site' => array(
 			'siret' => $productionSiteSiret,
 			'already_connected' => $siteAlreadyConnected,
@@ -704,12 +808,19 @@ if ($linkUsable && $action === 'submit_collecte') {
 			'pdl_contract_holder' => $pdlContractHolder,
 		),
 		'production' => array(
+			'prm' => $prm,
+			'network_type' => $typeReseau,
+			'exploitation_type' => $typeExploitation,
+			'installed_power_kwc' => $puissanceInstallee,
+			'injection_power_kva' => $puissanceInjection,
 			'no_related_project_attestation' => $noRelatedProjectAttestation,
 			'related_project_references' => $relatedProjectReferences,
 			'enedis_request_type' => $enedisRequestType,
 		),
 		'uploaded_piece_ids' => $uploadedPieceIds,
 	);
+
+	$collectionService = new CollectionService($db);
 
 	$object->site_name_snapshot = $siteName;
 	$object->site_address_snapshot = $siteAddress;
@@ -719,7 +830,10 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$object->type_reseau = $typeReseau;
 	$object->puissance_souscrite = $puissanceSouscrite;
 	$object->type_exploitation = $typeExploitation;
-	$object->puissance_installee_kwc = $puissanceInstallee;
+	$equipmentService = new RaccordementEquipment($db);
+	if (!$equipmentService->hasModules((int) $object->id)) {
+		$object->puissance_installee_kwc = $puissanceInstallee;
+	}
 	$object->puissance_injection_kva = $puissanceInjection;
 	$object->date_collecte_soumission = dol_now();
 	$object->date_mandat_signature = dol_now();
@@ -813,6 +927,20 @@ if ($linkUsable && $action === 'submit_collecte') {
 		$uploadErrors[] = $langs->trans('MandatSignatureRequired');
 	}
 
+	// Store files only after validating all non-file inputs, so an invalid form does not create partial documents.
+	if (empty($uploadErrors)) {
+		if ($collectionService->prelistRevision($object, $publicLink, $publicSummary, $langs, false) < 0) {
+			$uploadErrors[] = $collectionService->error;
+		}
+		foreach (procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice, $siteAlreadyConnected) as $pieceDefinition) {
+			$uploadedPieceId = procedurespvPublicStoreUploadedPiece($langs, $object, $publicLink, $pieceDefinition, $uploadErrors);
+			if ($uploadedPieceId > 0) {
+				$uploadedPieceIds[$pieceDefinition['code']] = $uploadedPieceId;
+			}
+		}
+		$publicSummary['uploaded_piece_ids'] = $uploadedPieceIds;
+	}
+
 	if (empty($uploadErrors)) {
 		$uploadDir = procedurespvGetRaccordementUploadDir($object);
 		$pdfModel = procedurespvLoadMandatEnedisPdfModel($db);
@@ -842,6 +970,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 				$pdfHash = hash_file('sha256', $uploadDir.'/'.$pdfFilename);
 				$signature = new Signature($db);
 				$signatureId = $signature->createSignedMandate($object, array(
+					'fk_publiclink' => (int) $publicLink->id,
 					'signataire_nom' => $signataireNom,
 					'signataire_fonction' => $signataireFonction,
 					'signataire_email' => $signataireEmail,
@@ -860,17 +989,36 @@ if ($linkUsable && $action === 'submit_collecte') {
 
 	if (empty($uploadErrors)) {
 		$publicSummary['signature_id'] = $signatureId;
-		$publicSummaryJson = json_encode($publicSummary, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-		$object->note_public = trim((string) $object->note_public."\n\n".$langs->trans('PublicCollecteSummary')."\n".(is_string($publicSummaryJson) ? $publicSummaryJson : ''));
-		$result = $object->update($user);
+		$beneficiarySync = new BeneficiarySync($db);
+		$workflowUser = procedurespvPublicGetWorkflowUser($db, $object, $user);
+		$result = is_object($workflowUser) ? $publicLink->savePayload($publicSummary) : -1;
 		if ($result > 0) {
-			$publicLink->markSubmitted();
+			if ($clientSiret !== '') {
+				$result = $beneficiarySync->synchronize($object, $publicSummary, $workflowUser);
+				if ($result > 0) {
+					$object->context['trigger_reason'] = 'public_collecte_submitted';
+					$object->context['changed_fields'] = array('fk_soc', 'status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'puissance_souscrite', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
+					$result = $object->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $workflowUser);
+				}
+			} else {
+				$result = $object->update($workflowUser);
+			}
+		}
+		if ($result > 0) {
+			$result = $publicLink->markSubmitted();
+		}
+		if ($result > 0) {
+			$result = $collectionService->prelistRevision($object, $publicLink, $publicSummary, $langs, true);
+		}
+		if ($result > 0) {
+			procedurespvCreateAgendaEvent($object, $workflowUser, 'AgendaCollecteSubmitted', $langs->transnoentitiesnoconv('AgendaCollecteSubmittedDetails'));
 			$linkUsable = false;
 			$submissionDone = true;
 			$submittedLinkAvailable = true;
 			setEventMessages($langs->trans('PublicCollecteSubmitted'), null, 'mesgs');
 		} else {
-			setEventMessages($object->error, $object->errors, 'errors');
+			$errorMessage = !is_object($workflowUser) ? 'PublicWorkflowUserUnavailable' : ($beneficiarySync->error !== '' ? $beneficiarySync->error : ($collectionService->error !== '' ? $collectionService->error : ($publicLink->error !== '' ? $publicLink->error : $object->error)));
+			setEventMessages($errorMessage, null, 'errors');
 		}
 	} else {
 		setEventMessages('', $uploadErrors, 'errors');
@@ -1291,7 +1439,8 @@ foreach ($beneficiaryStatuses as $value => $labelKey) {
 }
 print '</select>'.ajax_combobox('client_type').'</td></tr>';
 print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyWithoutSiret').'</td><td>'.$form->selectyesno('company_without_siret', $formCompanyWithoutSiret, 1, false, 0, 1).'<span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
-print '<tr class="public-beneficiary-nonindividual-row" id="client-siret-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-beneficiary-nonindividual-required="1" value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
+$siretLookupUrl = $_SERVER['PHP_SELF'].'?public_token='.urlencode($publicToken).'&action=lookup_siret';
+print '<tr class="public-beneficiary-nonindividual-row" id="client-siret-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-beneficiary-nonindividual-required="1" data-lookup-url="'.dol_escape_htmltag($siretLookupUrl).'" value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
 $organizationLabel = '<span id="beneficiary_organization_name_label" data-company-label="'.dol_escape_htmltag($langs->trans('BeneficiaryCompanyName')).'" data-public-label="'.dol_escape_htmltag($langs->trans('BeneficiaryPublicEntityName')).'" data-administration-label="'.dol_escape_htmltag($langs->trans('BeneficiaryAdministrationName')).'">'.$langs->trans($formClientType === 'societe' ? 'BeneficiaryCompanyName' : ($formClientType === 'collectivite' ? 'BeneficiaryPublicEntityName' : 'BeneficiaryAdministrationName')).'</span>';
 print '<tr class="public-beneficiary-nonindividual-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$organizationLabel.'</td><td><input type="text" class="flat minwidth500" name="client_name" autocomplete="organization" data-beneficiary-nonindividual-required="1" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
 print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyInseeCode').'</td><td><input type="text" class="flat minwidth300" name="company_insee_code" maxlength="5" data-beneficiary-company-required="1" value="'.dol_escape_htmltag($formCompanyInseeCode).'"></td></tr>';
@@ -1362,7 +1511,9 @@ foreach (array('autoconsommation_totale' => 'ExploitationAutoconsommationTotale'
 	print '<option value="'.dol_escape_htmltag($value).'"'.($formTypeExploitation === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('type_exploitation').'</td></tr>';
-print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag($formPuissanceInstallee).'"><span class="opacitymedium">kWc</span></span></td></tr>';
+$publicEquipmentService = new RaccordementEquipment($db);
+$installedPowerIsDerived = $publicEquipmentService->hasModules((int) $object->id);
+print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_installee_kwc"'.($installedPowerIsDerived ? ' readonly' : '').' value="'.dol_escape_htmltag($formPuissanceInstallee).'"><span class="opacitymedium">kWc</span></span>'.($installedPowerIsDerived ? '<span class="public-help">'.$langs->trans('InstalledPowerDerivedFromModules').'</span>' : '').'</td></tr>';
 print '<tr><td>'.$langs->trans('InjectionPowerKva').'</td><td><span class="public-unit-field"><input type="text" class="flat width100 right" name="puissance_injection_kva" value="'.dol_escape_htmltag($formPuissanceInjection).'"><span class="opacitymedium">kVA</span></span></td></tr>';
 print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('NoRelatedProjectAttestation').'</td><td><select class="flat minwidth300" name="no_related_project_attestation" id="no_related_project_attestation" data-company-required="1"><option value="yes"'.($formNoRelatedProjectAttestation === 'yes' ? ' selected' : '').'>'.$langs->trans('NoRelatedProjectYes').'</option><option value="no"'.($formNoRelatedProjectAttestation === 'no' ? ' selected' : '').'>'.$langs->trans('NoRelatedProjectNo').'</option></select>'.ajax_combobox('no_related_project_attestation').'<span class="public-help">'.$langs->trans('NoRelatedProjectAttestationHelp').'</span></td></tr>';
 print '<tr class="public-company-row public-related-project-row"'.($formClientType === 'societe' && $formNoRelatedProjectAttestation === 'no' ? '' : ' hidden').'><td>'.$langs->trans('RelatedProjectReferences').'</td><td><input type="text" class="flat minwidth500" name="related_project_references" data-company-required="1" value="'.dol_escape_htmltag($formRelatedProjectReferences).'"></td></tr>';
@@ -1387,9 +1538,7 @@ foreach (procedurespvPublicGetPieceDefinitions($formClientType, $formPdlChoice, 
 	}
 	$rowClass = !empty($rowClasses) ? ' class="'.implode(' ', $rowClasses).'"' : '';
 	$rowHidden = ((int) $pieceDefinition['company_only'] && $formClientType !== 'societe') || ((int) $pieceDefinition['pdl_other_only'] && ($formSiteAlreadyConnected !== 'yes' || $formPdlChoice !== 'existing_other_legal_entity')) ? ' hidden' : '';
-	$requiredAttribute = (int) $pieceDefinition['required'] ? ' required' : '';
-	$companyRequiredAttribute = (int) $pieceDefinition['company_only'] ? ' data-company-required="1"' : '';
-	print '<tr'.$rowClass.$rowHidden.'><td class="titlefield">'.$langs->trans($pieceDefinition['label']).'</td><td><input type="file" class="flat" name="'.dol_escape_htmltag($pieceDefinition['input']).'" accept=".pdf,.jpg,.jpeg,.png"'.$requiredAttribute.$companyRequiredAttribute.'><span class="public-help">'.$langs->trans($pieceDefinition['help']).'</span></td></tr>';
+	print '<tr'.$rowClass.$rowHidden.'><td class="titlefield">'.$langs->trans($pieceDefinition['label']).'</td><td><input type="file" class="flat" name="'.dol_escape_htmltag($pieceDefinition['input']).'" accept=".pdf,.jpg,.jpeg,.png"><span class="public-help">'.$langs->trans($pieceDefinition['help']).'</span></td></tr>';
 }
 print '</table>';
 print '</section>';
@@ -1530,6 +1679,40 @@ print '<script>
 			this.value = this.value.replace(/\\D/g, "").slice(0, 14);
 		});
 	});
+	function setFieldValue(name, value) {
+		if (value === undefined || value === null || value === "") return;
+		var field = document.querySelector("[name=\"" + name + "\"]");
+		if (!field) return;
+		field.value = value;
+		if (window.jQuery) window.jQuery(field).trigger("change");
+	}
+	function prefillBeneficiaryFromSiret() {
+		if (!siretInput || siretInput.value.length !== 14 || !siretInput.dataset.lookupUrl) return;
+		window.fetch(siretInput.dataset.lookupUrl + "&siret=" + encodeURIComponent(siretInput.value), {credentials: "same-origin"})
+			.then(function (response) { return response.ok ? response.json() : {result: {}}; })
+			.then(function (payload) {
+				var result = payload && payload.result ? payload.result : {};
+				if (!result.fk_soc) return;
+				setFieldValue("client_name", result.client_name);
+				setFieldValue("client_email", result.client_email);
+				setFieldValue("client_phone", result.client_phone);
+				setFieldValue("headquarters_address", result.address);
+				setFieldValue("headquarters_zip", result.zip);
+				setFieldValue("headquarters_town", result.town);
+				setFieldValue("beneficiary_country_id", result.country_id);
+				var contact = result.contact || {};
+				setFieldValue("beneficiary_civility", contact.civility);
+				setFieldValue("representative_lastname", contact.lastname);
+				setFieldValue("representative_firstname", contact.firstname);
+				setFieldValue("representative_function", contact.function);
+				setFieldValue("representative_mobile", contact.mobile);
+				if (contact.email) setFieldValue("client_email", contact.email);
+				if (contact.phone) setFieldValue("client_phone", contact.phone);
+				syncSignerName();
+				syncSignerFunction();
+			});
+	}
+	if (siretInput) siretInput.addEventListener("blur", prefillBeneficiaryFromSiret);
 	refreshPublicForm();
 	var stepsNav = document.querySelector(".public-steps");
 	var stepLinks = stepsNav ? Array.prototype.slice.call(stepsNav.querySelectorAll("a[href^=\"#public-section-\"]")) : [];

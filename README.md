@@ -18,10 +18,15 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Signature simple du mandat ENEDIS, génération PDF et hash SHA-256.
 - Mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, avec téléchargement public après soumission et tampon entreprise configurable.
 - Collecte publique entreprise enrichie selon la fiche DDR ENEDIS : société, représentant, site, raccordement existant et pièces obligatoires, avec CARD conditionnelle.
+- Révisions de collecte conservant les données soumises, le mandat et les pièces justificatives associés.
+- Workflow de contrôle des pièces (`En attente`, `Facultatif`, `Manquant`, `À contrôler`, `Valide`, `Invalide`) avec dépôt interne, aperçu, téléchargement, validation et refus.
+- Synchronisation transactionnelle du bénéficiaire avec les Tiers et Contacts Dolibarr à partir du SIRET.
+- Sélection structurée des onduleurs et modules depuis le catalogue PowerPlantPV, avec quantités, instantanés de puissance et agrégats serveur.
+- Affichage des fichiers collectés et générés dans le répertoire documentaire et l’onglet natif `Fichiers joints`.
 - Sélection des modèles de courriels depuis les modèles natifs Dolibarr par type d’objet.
 - Sélection native du modèle PDF du mandat ENEDIS dans les modèles de documents Dolibarr.
 - Onglets internes : Collecte client, Demande ENEDIS, CARDi, Convention / contrat, Mise en service, Relances.
-- Tables V1 : raccordement, liens publics, signatures, pièces, conventions, relances.
+- Tables V1 : raccordement, liens publics, signatures, pièces, équipements, conventions, relances.
 - Modèle de numérotation minimal et modèle PDF mandat ENEDIS.
 
 ## Workflow
@@ -36,6 +41,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 
 - Pas de dépôt automatique sur le portail ENEDIS.
 - Pas de synchronisation ENEDIS.
+- La sélection structurée des équipements est conditionnelle à l’activation de PowerPlantPV et à la disponibilité de ses API publiques compatibles ; les valeurs historiques restent lisibles sinon.
 - Le formulaire public CARDi est prévu mais désactivé en V1.
 - Les relances automatiques par cron ne sont pas encore activées ; la classe `Relance` expose `findDueRelances()` pour le lot suivant.
 - Les modèles de courriels doivent être créés dans l’administration native Dolibarr avec les types `procedurespv_collecte`, `procedurespv_relance_collecte` ou `procedurespv_relance_mandat`.

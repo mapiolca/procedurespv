@@ -1,0 +1,1 @@
+-- Indexes are declared in llx_pvproc_raccordement_equipment.sql to keep activation idempotent.

@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_piece
 	rowid integer AUTO_INCREMENT PRIMARY KEY,
 	entity integer DEFAULT 1 NOT NULL,
 	fk_raccordement integer NOT NULL,
+	fk_publiclink integer,
 	code_piece varchar(64),
 	label varchar(255),
 	origin varchar(32),
@@ -19,8 +20,9 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_piece
 	import_key varchar(14),
 	KEY idx_pvproc_piece_entity (entity),
 	KEY idx_pvproc_piece_fk_raccordement (fk_raccordement),
+	KEY idx_pvproc_piece_fk_publiclink (fk_publiclink),
 	KEY idx_pvproc_piece_code_piece (code_piece),
 	KEY idx_pvproc_piece_origin (origin),
-	KEY idx_pvproc_piece_status (status)
+	KEY idx_pvproc_piece_status (status),
+	UNIQUE KEY uk_pvproc_piece_revision (entity, fk_raccordement, fk_publiclink, code_piece, origin)
 ) ENGINE=innodb;
-

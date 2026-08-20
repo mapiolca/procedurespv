@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_signature
 	rowid integer AUTO_INCREMENT PRIMARY KEY,
 	entity integer DEFAULT 1 NOT NULL,
 	fk_raccordement integer NOT NULL,
+	fk_publiclink integer,
 	type_signature varchar(64),
 	signataire_nom varchar(255),
 	signataire_fonction varchar(255),
@@ -22,8 +23,8 @@ CREATE TABLE IF NOT EXISTS llx_pvproc_signature
 	import_key varchar(14),
 	KEY idx_pvproc_signature_entity (entity),
 	KEY idx_pvproc_signature_fk_raccordement (fk_raccordement),
+	KEY idx_pvproc_signature_fk_publiclink (fk_publiclink),
 	KEY idx_pvproc_signature_type_signature (type_signature),
 	KEY idx_pvproc_signature_status (status),
 	KEY idx_pvproc_signature_pdf_hash (pdf_hash)
 ) ENGINE=innodb;
-
