@@ -264,8 +264,8 @@ class Signature
 		$statusTypes = array(
 			self::STATUS_TO_GENERATE => 0,
 			self::STATUS_SENT_TO_CLIENT => 1,
-			self::STATUS_WAITING_SIGNATURE => 1,
-			self::STATUS_SIGNED_ONLINE => 3,
+			self::STATUS_WAITING_SIGNATURE => 0,
+			self::STATUS_SIGNED_ONLINE => 4,
 			self::STATUS_TO_CONTROL => 3,
 			self::STATUS_NON_COMPLIANT => 8,
 			self::STATUS_VALIDATED => 4,

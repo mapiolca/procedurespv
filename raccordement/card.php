@@ -19,6 +19,7 @@ require_once dol_buildpath('/procedurespv/class/relance.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 $langs->loadLangs(array('companies', 'projects', 'users', 'procedurespv@procedurespv'));
@@ -39,6 +40,7 @@ $formproject = new FormProjets($db);
 $formfile = new FormFile($db);
 $formactions = new FormActions($db);
 $centralePVAdapter = new CentralePVAdapter($db);
+$workflow = new RaccordementWorkflow($db);
 $hookmanager->initHooks(array('raccordementcard', 'globalcard'));
 
 $permissiontoread = procedurespvCanDo($user, 'raccordement', 'read');
@@ -54,6 +56,15 @@ if ($id > 0) {
 	if ($result <= 0) {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
+	$legacyIndependentTabs = array(
+		'contacts' => 'contact.php',
+		'documents' => 'document.php',
+		'agenda' => 'agenda.php',
+	);
+	if (isset($legacyIndependentTabs[$tab])) {
+		header('Location: '.dol_buildpath('/procedurespv/raccordement/'.$legacyIndependentTabs[$tab], 1).'?id='.(int) $object->id);
+		exit;
+	}
 }
 
 if ($cancel) {
@@ -67,11 +78,8 @@ $statusActions = array(
 	'ready_deposit' => array('permission' => 'write', 'from' => array(6), 'status' => 7, 'message' => 'RaccordementReadyForDeposit'),
 	'deposit_enedis' => array('permission' => 'write', 'from' => array(7), 'status' => 8, 'message' => 'RaccordementDepositedEnedis'),
 	'instruction_enedis' => array('permission' => 'write', 'from' => array(8), 'status' => 9, 'message' => 'RaccordementInstructionEnedis'),
-	'convention_received' => array('permission' => 'manage_convention', 'from' => array(9, 10), 'status' => 11, 'message' => 'ConventionMarkedReceived'),
-	'convention_signed' => array('permission' => 'manage_convention', 'from' => array(11), 'status' => 12, 'message' => 'ConventionMarkedSigned'),
 	'mes_requested' => array('permission' => 'manage_mes', 'from' => array(12, 13), 'status' => 14, 'message' => 'MESMarkedRequested'),
 	'mes_done' => array('permission' => 'manage_mes', 'from' => array(14), 'status' => 15, 'message' => 'MESMarkedDone'),
-	'close' => array('permission' => 'write', 'from' => array(15), 'status' => 16, 'message' => 'RaccordementClosed'),
 	'cancel' => array('permission' => 'write', 'from' => range(0, 15), 'status' => -1, 'message' => 'RaccordementCanceled'),
 );
 $sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_snapshot'), array_keys($statusActions));
@@ -460,16 +468,43 @@ if (isset($statusActions[$action]) && $object->id > 0) {
 			$transitionError = true;
 		}
 	}
+	if ($action === 'mes_requested') {
+		$missingRequirements = $workflow->getMesMissingRequirements($object);
+		if (!empty($missingRequirements)) {
+			$missingLabels = array();
+			foreach ($missingRequirements as $missingKey) {
+				$missingLabels[] = $langs->trans($missingKey);
+			}
+			accessforbidden($langs->trans('MESRequestBlocked').' : '.implode(', ', $missingLabels));
+		}
+		$object->mes_required = 1;
+		$object->mes_status = 2;
+		if (empty($object->date_demande_mes)) {
+			$object->date_demande_mes = dol_now();
+		}
+	}
 
 	if ($action !== '' && $action === 'deposit_enedis' && empty($object->date_depot_enedis)) {
 		$object->date_depot_enedis = dol_now();
 	}
+	if ($action === 'deposit_enedis') {
+		$object->demande_status = 2;
+	}
+	if ($action === 'instruction_enedis') {
+		$object->demande_status = 4;
+	}
 	if ($action === 'mes_done') {
-		$object->date_mes = dol_now();
+		$object->mes_required = 1;
+		$object->mes_status = 4;
+		$object->date_reelle_mes = dol_now();
+		$object->date_mes = $object->date_reelle_mes;
 	}
 
 	$statusAction = $action;
-	$result = $statusAction !== '' ? $object->setStatus($user, (int) $statusActions[$statusAction]['status']) : 0;
+	$targetStatus = $statusAction !== '' ? (int) $statusActions[$statusAction]['status'] : (int) $object->status;
+	$object->status = $targetStatus;
+	$targetStatus = $workflow->getReconciledStatus($object);
+	$result = $statusAction !== '' ? $object->setStatus($user, $targetStatus) : 0;
 	if ($result > 0) {
 		procedurespvCreateAgendaEvent($object, $user, $statusActions[$statusAction]['message']);
 		setEventMessages($langs->trans($statusActions[$statusAction]['message']), null, 'mesgs');
@@ -615,30 +650,6 @@ if ($action === 'create' || $action === 'edit') {
 	$linkback = '<a href="'.dol_buildpath('/procedurespv/raccordement/list.php', 1).'">'.$langs->trans('BackToList').'</a>';
 	dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 
-	if ($tab === 'documents') {
-		$uploadDir = procedurespvGetRaccordementUploadDir($object);
-		$urlsource = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&tab=documents';
-		print '<div class="div-table-responsive-no-min">';
-		print $formfile->showdocuments('procedurespv', dol_sanitizeFileName((string) $object->ref), $uploadDir, $urlsource, 0, 0, '', 0, 0, 0, 28, 0, 'entity='.(int) $object->entity, '', '', $langs->defaultlang, '', $object);
-		print '</div>';
-		print dol_get_fiche_end();
-		llxFooter();
-		$db->close();
-		exit;
-	}
-
-	if ($tab === 'agenda') {
-		if (isModEnabled('agenda')) {
-			$formactions->showactions($object, $object->element.'@'.$object->module, (int) $object->fk_soc, 1, 'listactions', getDolGlobalInt('MAIN_SIZE_SHORTLIST_LIMIT', 20));
-		} else {
-			print '<div class="warning">'.$langs->trans('AgendaModuleDisabled').'</div>';
-		}
-		print dol_get_fiche_end();
-		llxFooter();
-		$db->close();
-		exit;
-	}
-
 	if ($tab !== 'card') {
 		print '<div class="opacitymedium">'.$langs->trans('TabPlannedInNextBatch').'</div>';
 		print dol_get_fiche_end();
@@ -704,7 +715,7 @@ if ($action === 'create' || $action === 'edit') {
 	print '<tr><td>'.$langs->trans('NextRelance').'</td><td colspan="2">'.($relanceSummary['next_due'] ? dol_print_date((int) $relanceSummary['next_due'], 'dayhour') : '').'</td></tr>';
 	print '<tr><td>'.$langs->trans('ActiveRelances').'</td><td colspan="2">'.((int) $relanceSummary['active_count']).'</td></tr>';
 	if ((int) $relanceSummary['overdue_count'] > 0) {
-		print '<tr><td>'.$langs->trans('OverdueRelances').'</td><td colspan="2"><span class="badge badge-status4">'.((int) $relanceSummary['overdue_count']).'</span></td></tr>';
+		print '<tr><td>'.$langs->trans('OverdueRelances').'</td><td colspan="2">'.dolGetStatus((string) ((int) $relanceSummary['overdue_count']), '', '', 'status8', 5).'</td></tr>';
 	}
 	print '<tr><td>'.$langs->trans('BlockingReason').'</td><td colspan="2">'.$langs->trans($object->getBlockingReason()).'</td></tr>';
 	print '</table>';
@@ -721,57 +732,20 @@ if ($action === 'create' || $action === 'edit') {
 	print '<td>'.$langs->trans('Responsible').'</td>';
 	print '</tr>';
 
-	/** @var list<array{step: string, status_label: string, status_type: string, last_action: string, next_action: string, responsible: string}> $trackingRows */
-	$trackingRows = array(
-		array(
-			'step' => 'CollecteClient',
-			'status_label' => $object->status >= 4 ? 'RaccordementStatusCollecteSubmitted' : ($object->status >= 2 ? 'RaccordementStatusCollecteSent' : 'RaccordementStatusCollecteToSend'),
-			'status_type' => $object->status >= 4 ? 'status5' : ($object->status >= 2 ? 'status1' : 'status0'),
-			'last_action' => 'CollecteSentDate',
-			'next_action' => $object->getNextAction(),
-			'responsible' => 'ResponsibleInternal',
-		),
-		array(
-			'step' => 'MandatEnedis',
-			'status_label' => $object->date_mandat_validation ? 'SignatureStatusValidated' : ($object->date_mandat_signature ? 'SignatureStatusToControl' : 'SignatureStatusWaiting'),
-			'status_type' => $object->date_mandat_validation ? 'status5' : ($object->date_mandat_signature ? 'status4' : 'status1'),
-			'last_action' => 'MandatSignatureDate',
-			'next_action' => 'NextActionInternalControl',
-			'responsible' => 'ResponsibleInternal',
-		),
-		array(
-			'step' => 'DemandeRaccordement',
-			'status_label' => $object->status >= 8 ? 'RaccordementStatusDepositedEnedis' : 'RequestStatusToComplete',
-			'status_type' => $object->status >= 8 ? 'status5' : 'status4',
-			'last_action' => 'EnedisDepositDate',
-			'next_action' => 'NextActionPrepareEnedisDeposit',
-			'responsible' => 'ResponsibleInternal',
-		),
-		array(
-			'step' => 'CARDi',
-			'status_label' => 'CardiStatusToDetermine',
-			'status_type' => 'status0',
-			'last_action' => 'Dash',
-			'next_action' => 'Dash',
-			'responsible' => 'Dash',
-		),
-		array(
-			'step' => 'ConventionContrat',
-			'status_label' => $object->status >= 12 ? 'RaccordementStatusConventionSigned' : 'ConventionStatusNotReceived',
-			'status_type' => $object->status >= 12 ? 'status5' : 'status0',
-			'last_action' => 'Dash',
-			'next_action' => 'NextActionSendConvention',
-			'responsible' => 'Enedis',
-		),
-		array(
-			'step' => 'MiseEnService',
-			'status_label' => $object->status >= 15 ? 'RaccordementStatusMesDone' : 'MESStatusNotRequested',
-			'status_type' => $object->status >= 15 ? 'status5' : 'status0',
-			'last_action' => 'Dash',
-			'next_action' => 'NextActionPrepareMES',
-			'responsible' => 'ResponsibleInternal',
-		),
+	$stageStates = $workflow->getStageStates($object);
+	$trackingMetadata = array(
+		'collection' => array('step' => 'CollecteClient', 'last_action' => 'CollecteSentDate', 'next_action' => 'NextActionInternalControl', 'responsible' => 'ResponsibleInternal'),
+		'mandate' => array('step' => 'MandatEnedis', 'last_action' => 'MandatSignatureDate', 'next_action' => 'NextActionInternalControl', 'responsible' => 'ResponsibleInternal'),
+		'request' => array('step' => 'DemandeRaccordement', 'last_action' => 'EnedisDepositDate', 'next_action' => 'NextActionPrepareEnedisDeposit', 'responsible' => 'ResponsibleInternal'),
+		'cardi' => array('step' => 'CARDi', 'last_action' => 'Dash', 'next_action' => 'Dash', 'responsible' => 'ResponsibleInternal'),
+		'convention' => array('step' => 'ConventionContrat', 'last_action' => 'Dash', 'next_action' => 'NextActionSendConvention', 'responsible' => 'Enedis'),
+		'mes' => array('step' => 'MiseEnService', 'last_action' => 'MESRealDate', 'next_action' => 'NextActionPrepareMES', 'responsible' => 'ResponsibleInternal'),
 	);
+	$trackingRows = array();
+	foreach ($trackingMetadata as $stageCode => $metadata) {
+		$state = $stageStates[$stageCode];
+		$trackingRows[] = array_merge($metadata, array('status_label' => $state['label'], 'status_type' => $state['type']));
+	}
 
 	foreach ($trackingRows as $trackingRow) {
 		print '<tr class="oddeven">';
@@ -810,7 +784,7 @@ if ($action === 'create' || $action === 'edit') {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=send_collecte&token='.$token.'">'.$langs->trans('SendCollecteClientAction').'</a>';
 	}
 	if ($permissiontoadd) {
-		foreach (array('mark_collecte_submitted' => 'MarkCollecteSubmitted', 'ready_deposit' => 'MarkReadyForDeposit', 'deposit_enedis' => 'MarkDepositedEnedis', 'instruction_enedis' => 'MarkInstructionEnedis', 'close' => 'Close') as $statusAction => $labelKey) {
+		foreach (array('mark_collecte_submitted' => 'MarkCollecteSubmitted', 'ready_deposit' => 'MarkReadyForDeposit', 'deposit_enedis' => 'MarkDepositedEnedis', 'instruction_enedis' => 'MarkInstructionEnedis') as $statusAction => $labelKey) {
 			if (in_array((int) $object->status, $statusActions[$statusAction]['from'], true)) {
 				print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action='.$statusAction.'&token='.$token.'">'.$langs->trans($labelKey).'</a>';
 			}
@@ -825,17 +799,18 @@ if ($action === 'create' || $action === 'edit') {
 	if (procedurespvCanDo($user, 'raccordement', 'freeze_snapshot') && empty($object->date_snapshot)) {
 		print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=freeze_snapshot&token='.$token.'">'.$langs->trans('FreezeSnapshot').'</a>';
 	}
-	if (procedurespvCanDo($user, 'raccordement', 'manage_convention')) {
-		if (in_array((int) $object->status, $statusActions['convention_received']['from'], true)) {
-			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_received&token='.$token.'">'.$langs->trans('MarkConventionReceived').'</a>';
-		}
-		if (in_array((int) $object->status, $statusActions['convention_signed']['from'], true)) {
-			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=convention_signed&token='.$token.'">'.$langs->trans('MarkConventionSigned').'</a>';
-		}
-	}
 	if (procedurespvCanDo($user, 'raccordement', 'manage_mes')) {
 		if (in_array((int) $object->status, $statusActions['mes_requested']['from'], true)) {
-			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_requested&token='.$token.'">'.$langs->trans('MarkMESRequested').'</a>';
+			$missingRequirements = $workflow->getMesMissingRequirements($object);
+			if (empty($missingRequirements)) {
+				print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_requested&token='.$token.'">'.$langs->trans('MarkMESRequested').'</a>';
+			} else {
+				$missingLabels = array();
+				foreach ($missingRequirements as $missingKey) {
+					$missingLabels[] = $langs->trans($missingKey);
+				}
+				print '<span class="butActionRefused classfortooltip" title="'.dol_escape_htmltag($langs->trans('MESRequestBlocked').' : '.implode(', ', $missingLabels)).'">'.$langs->trans('MarkMESRequested').'</span>';
+			}
 		}
 		if (in_array((int) $object->status, $statusActions['mes_done']['from'], true)) {
 			print '<a class="butAction" href="'.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id.'&action=mes_done&token='.$token.'">'.$langs->trans('MarkMESDone').'</a>';

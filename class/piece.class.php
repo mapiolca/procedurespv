@@ -182,7 +182,7 @@ class Piece
 	public function getLibStatut($mode = 5)
 	{
 		global $langs;
-		$badgeStatus = array(self::STATUS_WAITING => 0, self::STATUS_OPTIONAL => 1, self::STATUS_MISSING => 8, self::STATUS_TO_CONTROL => 3, self::STATUS_VALID => 4, self::STATUS_INVALID => 8);
+		$badgeStatus = array(self::STATUS_WAITING => 0, self::STATUS_OPTIONAL => 0, self::STATUS_MISSING => 8, self::STATUS_TO_CONTROL => 3, self::STATUS_VALID => 4, self::STATUS_INVALID => 8);
 		return dolGetStatus($langs->trans($this->getStatusLabelKey()), '', '', 'status'.($badgeStatus[(int) $this->status] ?? 0), $mode);
 	}
 

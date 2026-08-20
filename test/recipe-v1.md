@@ -182,3 +182,28 @@ Résultats attendus : aucune liste d’identifiants n’est stockée, les instan
 4. Refaire la recette sur un raccordement appartenant à une seconde entité puis consulté par partage.
 
 Résultats attendus : les fichiers restent dans le répertoire de l’entité propriétaire, aucun événement n’est dupliqué et les droits d’écriture restent distincts du droit de lecture documentaire.
+
+## Scénario 10 - Pages transverses natives indépendantes
+
+1. Ouvrir successivement `Contacts/Adresses`, `Fichiers joints` et `Événements/Agenda` depuis la fiche d’un raccordement.
+2. Vérifier que chaque onglet charge son propre fichier PHP et conserve la bannière, les onglets et les droits du raccordement.
+3. Ajouter puis retirer un contact interne et un contact externe avec les types proposés pour le raccordement.
+4. Déposer, renommer, prévisualiser, télécharger puis supprimer un fichier depuis la page documentaire.
+5. Créer un événement depuis la page Agenda et vérifier son lien vers le raccordement.
+6. Ouvrir les anciennes URL `card.php?id=<id>&tab=contacts`, `documents` et `agenda`.
+
+Résultats attendus : les trois pages utilisent les composants natifs Dolibarr, les anciennes URL redirigent vers les nouvelles pages, les actions sont protégées par droits et token, et les documents utilisent l’entité propriétaire du raccordement.
+
+## Scénario 11 - Badges, Consuel et verrouillage de la MES
+
+1. Vérifier les badges d’une collecte en attente, soumise puis validée : gris contour, orange puis vert.
+2. Vérifier les badges `À compléter`, `À contrôler`, `Invalide` et `Clôturé` : ambre, ambre, rouge et gris plein.
+3. Renseigner la date et la référence Consuel sans fichier, puis contrôler que `Demander la mise en service` reste grisé et que son aide mentionne le fichier manquant.
+4. Joindre puis remplacer l’attestation Consuel et contrôler son aperçu, son téléchargement et sa présence dans la page indépendante `Fichiers joints`.
+5. Tester séparément chaque prérequis MES : collecte/mandat/pièces, demande ENEDIS, CARDi requis, convention et triplet Consuel.
+6. Appeler directement l’action `mark_requested` avec un prérequis manquant et vérifier le refus serveur, puis refaire le test avec le dossier complet.
+7. Marquer la MES réalisée avec toutes les étapes terminées et vérifier la clôture automatique, sans bouton manuel `Clôturer`.
+8. Invalider ensuite un CARDi ou rendre la convention obsolète et vérifier la réouverture sur la première étape incomplète.
+9. Rejouer le dépôt et le téléchargement du Consuel sur deux entités et depuis un objet partagé.
+
+Résultats attendus : aucun badge spécifique au module n’est utilisé, les éléments facultatifs restent neutres et ne bloquent pas la complétude, le Consuel est stocké dans le répertoire documentaire de l’entité propriétaire, et aucune requête directe ne contourne les prérequis MES.

@@ -42,7 +42,7 @@ class modProceduresPV extends DolibarrModules
 			'models' => 1,
 			'triggers' => 1,
 			'hooks' => array(
-				'data' => array('emailtemplates'),
+				'data' => array('emailtemplates', 'elementproperties'),
 				'entity' => '0',
 			),
 		);
@@ -248,6 +248,18 @@ class modProceduresPV extends DolibarrModules
 		require_once dol_buildpath('/procedurespv/class/actions_procedurespv.class.php', 0);
 
 		$sql = array();
+		/** @var list<array{0:string,1:string,2:string,3:int}> $contactTypes */
+		$contactTypes = array(
+			array('internal', 'PVPROC_RESPONSIBLE', 'RaccordementContactInternalResponsible', 10),
+			array('external', 'PVPROC_BENEFICIARY', 'RaccordementContactBeneficiary', 20),
+			array('external', 'PVPROC_ENEDIS', 'RaccordementContactEnedis', 30),
+			array('external', 'PVPROC_TECHNICAL', 'RaccordementContactTechnical', 40),
+		);
+		foreach ($contactTypes as $contactType) {
+			$sql[] = 'INSERT INTO '.MAIN_DB_PREFIX."c_type_contact (element, source, code, libelle, active, module, position)"
+				." SELECT 'procedurespv_raccordement', '".$this->db->escape($contactType[0])."', '".$this->db->escape($contactType[1])."', '".$this->db->escape($contactType[2])."', 1, 'procedurespv', ".((int) $contactType[3])
+				.' WHERE NOT EXISTS (SELECT 1 FROM '.MAIN_DB_PREFIX."c_type_contact WHERE element = 'procedurespv_raccordement' AND source = '".$this->db->escape($contactType[0])."' AND code = '".$this->db->escape($contactType[1])."')";
+		}
 		$result = $this->_load_tables('/procedurespv/sql/');
 		if ($result < 0) {
 			return -1;

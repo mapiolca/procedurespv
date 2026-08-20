@@ -13,6 +13,7 @@ require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 /**
@@ -57,6 +58,7 @@ $permissiontofreeze = procedurespvCanDo($user, 'raccordement', 'freeze_snapshot'
 if (!$permissiontoread) {
 	accessforbidden();
 }
+$workflow = new RaccordementWorkflow($db);
 
 $sensitiveActions = array('save', 'mark_complete', 'freeze_snapshot', 'mark_deposited', 'mark_complement', 'mark_instruction');
 if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
@@ -83,7 +85,6 @@ if (in_array($action, $sensitiveActions, true)) {
 		$object->puissance_raccordement_demandee = (float) price2num(GETPOST('puissance_raccordement_demandee', 'alphanohtml'));
 		$object->type_reseau = GETPOST('type_reseau', 'alphanohtml');
 		$object->mono_tri_confirme = GETPOST('mono_tri_confirme', 'alphanohtml');
-		$object->consuel_requis = GETPOSTINT('consuel_requis');
 		$object->commentaire_technique = GETPOST('commentaire_technique', 'restricthtml');
 
 		foreach (array('schema_unifilaire' => 'SingleLineDiagram', 'plan_masse' => 'SitePlan', 'plan_cadastral' => 'CadastralPlan', 'bilan_puissance' => 'PowerBalance') as $field => $labelKey) {
@@ -151,9 +152,10 @@ if (in_array($action, $sensitiveActions, true)) {
 		$object->demande_status = 4;
 		$object->status = 9;
 	}
+	$object->status = $workflow->getReconciledStatus($object);
 
 	$object->context['trigger_reason'] = 'enedis_request_update';
-	$object->context['changed_fields'] = array('ref_enedis', 'date_depot_enedis', 'demande_status');
+	$object->context['changed_fields'] = array('ref_enedis', 'date_depot_enedis', 'demande_status', 'status');
 	if ($uploadFailed) {
 		$result = -1;
 	} elseif ($action === 'save' && RaccordementEquipment::isAvailable()) {
@@ -276,7 +278,6 @@ foreach (array('schema_unifilaire' => 'SingleLineDiagram', 'plan_masse' => 'Site
 	}
 	print '</td></tr>';
 }
-print '<tr><td>'.$langs->trans('ConsuelRequired').'</td><td>'.$form->selectyesno('consuel_requis', (int) $object->consuel_requis, 1).'</td></tr>';
 print '<tr><td>'.$langs->trans('TechnicalComment').'</td><td><textarea class="flat centpercent" name="commentaire_technique" rows="3">'.dol_escape_htmltag((string) $object->commentaire_technique).'</textarea></td></tr>';
 print '</table>';
 

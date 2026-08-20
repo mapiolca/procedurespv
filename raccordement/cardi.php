@@ -10,6 +10,7 @@
 require '../../../main.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 /**
@@ -53,6 +54,7 @@ $permissiontowrite = procedurespvCanDo($user, 'raccordement', 'manage_cardi');
 if (!$permissiontoread) {
 	accessforbidden();
 }
+$workflow = new RaccordementWorkflow($db);
 
 $cardiTransitions = array(
 	'set_required' => !((int) $object->cardi_required === 1) && (int) $object->cardi_status !== 6,
@@ -60,10 +62,10 @@ $cardiTransitions = array(
 	'mark_sent_client' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(1, 2), true),
 	'mark_received' => (int) $object->cardi_required === 1 && (int) $object->cardi_status === 3,
 	'validate_cardi' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(4, 5), true),
-	'refuse_cardi' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(4, 5), true),
+	'refuse_cardi' => (int) $object->cardi_required === 1 && in_array((int) $object->cardi_status, array(4, 5, 6), true),
 );
 $sensitiveActions = array_merge(array('save', 'send_public_cardi'), array_keys($cardiTransitions));
-if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
+if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
@@ -115,9 +117,10 @@ if ($action === 'save' || isset($cardiTransitions[$action])) {
 	if ($action === 'refuse_cardi') {
 		$object->cardi_status = 7;
 	}
+	$object->status = $workflow->getReconciledStatus($object);
 
 	$object->context['trigger_reason'] = 'cardi_update';
-	$object->context['changed_fields'] = array('cardi_required', 'cardi_status');
+	$object->context['changed_fields'] = array('cardi_required', 'cardi_status', 'status');
 	$result = $object->update($user);
 	if ($result > 0) {
 		procedurespvCreateAgendaEvent($object, $user, 'AgendaCardiUpdated');
@@ -146,7 +149,7 @@ print '<input type="hidden" name="action" value="save">';
 print '<table class="border centpercent tableforfield">';
 print '<tr><td class="titlefield">'.$langs->trans('CardiRequired').'</td><td>'.$langs->trans(array(0 => 'No', 1 => 'Yes', 2 => 'ToDetermine')[(int) $object->cardi_required] ?? 'ToDetermine').'</td></tr>';
 $statuses = array(0 => 'CardiStatusNotRequired', 1 => 'CardiStatusToPrepare', 2 => 'CardiStatusToSendClient', 3 => 'CardiStatusWaitingClient', 4 => 'CardiStatusReceived', 5 => 'CardiStatusToControl', 6 => 'CardiStatusValidated', 7 => 'CardiStatusNonCompliant');
-$cardiStatusTypes = array(0 => 'status0', 1 => 'status1', 2 => 'status1', 3 => 'status4', 4 => 'status4', 5 => 'status4', 6 => 'status5', 7 => 'status8');
+$cardiStatusTypes = array(0 => 'status0', 1 => 'status3', 2 => 'status3', 3 => 'status0', 4 => 'status1', 5 => 'status3', 6 => 'status4', 7 => 'status8');
 print '<tr><td>'.$langs->trans('CardiStatus').'</td><td>'.dolGetStatus($langs->trans($statuses[(int) $object->cardi_status] ?? 'CardiStatusToDetermine'), '', '', $cardiStatusTypes[(int) $object->cardi_status] ?? 'status0', 6).'</td></tr>';
 print '<tr><td>'.$langs->trans('CardiRequestDate').'</td><td>';
 $form->selectDate($object->cardi_date_demande ? (int) $object->cardi_date_demande : -1, 'cardi_date_demande', 1, 1, 1, '', 1, 1);

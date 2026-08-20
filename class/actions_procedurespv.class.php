@@ -132,4 +132,38 @@ class ActionsProceduresPV
 
 		return 0;
 	}
+
+	/**
+	 * Resolve the raccordement as a native external Dolibarr object.
+	 *
+	 * The historical element name contains the module prefix. This correction
+	 * keeps existing Agenda links stable while exposing the real permission
+	 * sub-element and class to getElementProperties().
+	 *
+	 * @param array<string,mixed> $parameters Hook parameters
+	 * @param CommonObject|null $object Current object
+	 * @param string $action Current action
+	 * @param HookManager $hookmanager Hook manager
+	 * @return int
+	 */
+	public function getElementProperties($parameters, &$object, &$action, $hookmanager)
+	{
+		$elementType = isset($parameters['elementType']) ? (string) $parameters['elementType'] : '';
+		if (!in_array($elementType, array('procedurespv_raccordement', 'procedurespv_raccordement@procedurespv'), true)) {
+			return 0;
+		}
+
+		$existing = isset($parameters['elementProperties']) && is_array($parameters['elementProperties']) ? $parameters['elementProperties'] : array();
+		$this->results = array_replace($existing, array(
+			'module' => 'procedurespv',
+			'element' => 'raccordement',
+			'table_element' => 'pvproc_raccordement',
+			'subelement' => 'raccordement',
+			'classpath' => 'procedurespv/class',
+			'classfile' => 'raccordement',
+			'classname' => 'Raccordement',
+		));
+
+		return 1;
+	}
 }

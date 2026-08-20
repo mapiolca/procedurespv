@@ -70,10 +70,9 @@ function procedurespvRaccordementPrepareHead($object = null)
 	$h++;
 
 	$tabs = array(
-		'contacts' => array('ContactsAddresses', '/procedurespv/raccordement/card.php'),
+		'contacts' => array('ContactsAddresses', '/procedurespv/raccordement/contact.php'),
 		'notes' => array('Notes', '/procedurespv/raccordement/card.php'),
-		'documents' => array('AttachedFiles', '/procedurespv/raccordement/card.php'),
-		'agenda' => array('EventsAgenda', '/procedurespv/raccordement/card.php'),
+		'documents' => array('AttachedFiles', '/procedurespv/raccordement/document.php'),
 		'collecte' => array('CollecteClient', '/procedurespv/raccordement/collecte.php'),
 		'demande' => array('DemandeRaccordement', '/procedurespv/raccordement/demande.php'),
 		'cardi' => array('CARDi', '/procedurespv/raccordement/cardi.php'),
@@ -82,6 +81,11 @@ function procedurespvRaccordementPrepareHead($object = null)
 		'relances' => array('Relances', '/procedurespv/raccordement/relances.php'),
 		'history' => array('History', '/procedurespv/raccordement/card.php'),
 	);
+	if (isModEnabled('agenda')) {
+		$tabs = array_slice($tabs, 0, 3, true)
+			+ array('agenda' => array('EventsAgenda', '/procedurespv/raccordement/agenda.php'))
+			+ array_slice($tabs, 3, null, true);
+	}
 
 	foreach ($tabs as $tabKey => $tabDefinition) {
 		$tabUrl = dol_buildpath($tabDefinition[1], 1).($id > 0 ? '?id='.$id : '');

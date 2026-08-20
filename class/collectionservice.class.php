@@ -66,13 +66,27 @@ class CollectionService
 	public function canValidateCollection($fkRaccordement, $fkPublicLink)
 	{
 		$signature = new Signature($this->db);
-		if ($signature->fetchForRevision($fkRaccordement, $fkPublicLink) <= 0 || (int) $signature->status !== Signature::STATUS_VALIDATED) {
+		if (
+			$signature->fetchForRevision($fkRaccordement, $fkPublicLink) <= 0
+			|| (int) $signature->status !== Signature::STATUS_VALIDATED
+			|| trim((string) $signature->filepath) === ''
+			|| trim((string) $signature->filename) === ''
+			|| !is_file(rtrim((string) $signature->filepath, '/').'/'.(string) $signature->filename)
+		) {
 			$this->error = 'CollectionRequiresValidatedMandate';
 			return false;
 		}
 		$piece = new Piece($this->db);
 		foreach ($piece->fetchAllByRaccordement($fkRaccordement, $fkPublicLink) as $document) {
-			if ((int) $document->required === 1 && (int) $document->status !== Piece::STATUS_VALID) {
+			if (
+				(int) $document->required === 1
+				&& (
+					(int) $document->status !== Piece::STATUS_VALID
+					|| trim((string) $document->filepath) === ''
+					|| trim((string) $document->filename) === ''
+					|| !is_file(rtrim((string) $document->filepath, '/').'/'.(string) $document->filename)
+				)
+			) {
 				$this->error = 'CollectionRequiresValidatedDocuments';
 				return false;
 			}

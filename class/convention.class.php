@@ -264,6 +264,7 @@ class Convention
 				self::STATUS_SENT_FOR_SIGNATURE,
 				self::STATUS_SIGNED,
 				self::STATUS_RETURNED_ENEDIS,
+				self::STATUS_VALIDATED,
 			),
 		);
 
@@ -285,9 +286,9 @@ class Convention
 			self::STATUS_RECEIVED => 1,
 			self::STATUS_TO_CONTROL => 3,
 			self::STATUS_TO_SIGN => 3,
-			self::STATUS_SENT_FOR_SIGNATURE => 3,
+			self::STATUS_SENT_FOR_SIGNATURE => 1,
 			self::STATUS_SIGNED => 4,
-			self::STATUS_RETURNED_ENEDIS => 1,
+			self::STATUS_RETURNED_ENEDIS => 4,
 			self::STATUS_VALIDATED => 4,
 			self::STATUS_OBSOLETE => 8,
 		);

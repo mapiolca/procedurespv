@@ -11,6 +11,7 @@ require '../../../main.inc.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/convention.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 /**
@@ -77,9 +78,10 @@ $permissiontowrite = procedurespvCanDo($user, 'raccordement', 'manage_convention
 if (!$permissiontoread) {
 	accessforbidden();
 }
+$workflow = new RaccordementWorkflow($db);
 
 $sensitiveActions = array('add_convention', 'update_convention', 'mark_received', 'mark_sent_signature', 'mark_signed', 'mark_returned_enedis', 'mark_validated', 'mark_obsolete');
-if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
+if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
@@ -135,20 +137,32 @@ if (isset($statusActions[$action])) {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
 
+	$db->begin();
 	$result = $convention->setStatus((int) $statusActions[$action]['status']);
 	if ($result > 0) {
+		$originalStatus = (int) $object->status;
+		$targetStatus = $originalStatus;
 		if ($action === 'mark_received' && (int) $object->status < 11) {
-			$object->setStatus($user, 11);
+			$targetStatus = 11;
 		}
 		if ($action === 'mark_signed' && (int) $object->status < 12) {
-			$object->setStatus($user, 12);
+			$targetStatus = 12;
 		}
-		setEventMessages($langs->trans('ConventionStatusUpdated'), null, 'mesgs');
-		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
-		exit;
+		$object->status = $targetStatus;
+		$targetStatus = $workflow->getReconciledStatus($object);
+		if ($targetStatus !== $originalStatus) {
+			$result = $object->setStatus($user, $targetStatus);
+		}
+		if ($result > 0) {
+			$db->commit();
+			setEventMessages($langs->trans('ConventionStatusUpdated'), null, 'mesgs');
+			header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
+			exit;
+		}
 	}
 
-	setEventMessages($convention->error, $convention->errors, 'errors');
+	$db->rollback();
+	setEventMessages($object->error !== '' ? $object->error : $convention->error, !empty($object->errors) ? $object->errors : $convention->errors, 'errors');
 }
 
 $form = new Form($db);

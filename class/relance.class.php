@@ -379,8 +379,8 @@ class Relance
 		global $langs;
 
 		$statusTypes = array(
-			self::STATUS_PLANNED => 3,
-			self::STATUS_SENT => 4,
+			self::STATUS_PLANNED => 0,
+			self::STATUS_SENT => 1,
 			self::STATUS_CANCELED => 8,
 		);
 

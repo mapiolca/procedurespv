@@ -94,7 +94,6 @@ class Raccordement extends CommonObject
 		'plan_masse' => array('type' => 'varchar(255)', 'label' => 'SitePlan', 'enabled' => 1, 'visible' => 1, 'position' => 246),
 		'plan_cadastral' => array('type' => 'varchar(255)', 'label' => 'CadastralPlan', 'enabled' => 1, 'visible' => 1, 'position' => 247),
 		'bilan_puissance' => array('type' => 'varchar(255)', 'label' => 'PowerBalance', 'enabled' => 1, 'visible' => 1, 'position' => 248),
-		'consuel_requis' => array('type' => 'integer', 'label' => 'ConsuelRequired', 'enabled' => 1, 'visible' => 1, 'position' => 249),
 		'commentaire_technique' => array('type' => 'text', 'label' => 'TechnicalComment', 'enabled' => 1, 'visible' => 1, 'position' => 250),
 		'demande_status' => array('type' => 'integer', 'label' => 'RequestStatus', 'enabled' => 1, 'visible' => 1, 'position' => 251),
 		'cardi_required' => array('type' => 'integer', 'label' => 'CardiRequired', 'enabled' => 1, 'visible' => 1, 'position' => 252),
@@ -110,7 +109,6 @@ class Raccordement extends CommonObject
 		'date_demande_mes' => array('type' => 'datetime', 'label' => 'MESRequestDate', 'enabled' => 1, 'visible' => 1, 'position' => 264),
 		'date_previsionnelle_mes' => array('type' => 'datetime', 'label' => 'MESPlannedDate', 'enabled' => 1, 'visible' => 1, 'position' => 265),
 		'date_reelle_mes' => array('type' => 'datetime', 'label' => 'MESRealDate', 'enabled' => 1, 'visible' => 1, 'position' => 266),
-		'consuel_recu' => array('type' => 'integer', 'label' => 'ConsuelReceived', 'enabled' => 1, 'visible' => 1, 'position' => 267),
 		'date_consuel' => array('type' => 'datetime', 'label' => 'ConsuelDate', 'enabled' => 1, 'visible' => 1, 'position' => 268),
 		'ref_consuel' => array('type' => 'varchar(128)', 'label' => 'ConsuelReference', 'enabled' => 1, 'visible' => 1, 'position' => 269),
 		'injection_autorisee' => array('type' => 'integer', 'label' => 'InjectionAuthorized', 'enabled' => 1, 'visible' => 1, 'position' => 270),
@@ -134,6 +132,8 @@ class Raccordement extends CommonObject
 	public $entity;
 	public $ref;
 	public $fk_soc;
+	/** @var int Native alias used by Dolibarr contact and agenda templates. */
+	public $socid;
 	public $fk_project;
 	public $fk_centrale_pv;
 	public $site_source;
@@ -169,7 +169,6 @@ class Raccordement extends CommonObject
 	public $plan_masse;
 	public $plan_cadastral;
 	public $bilan_puissance;
-	public $consuel_requis;
 	public $commentaire_technique;
 	public $demande_status;
 	public $cardi_required;
@@ -185,7 +184,6 @@ class Raccordement extends CommonObject
 	public $date_demande_mes;
 	public $date_previsionnelle_mes;
 	public $date_reelle_mes;
-	public $consuel_recu;
 	public $date_consuel;
 	public $ref_consuel;
 	public $injection_autorisee;
@@ -278,6 +276,11 @@ class Raccordement extends CommonObject
 		if ($result <= 0) {
 			return $result;
 		}
+		$this->socid = (int) $this->fk_soc;
+		$this->date_creation = $this->datec;
+		$this->date_modification = $this->tms;
+		$this->user_creation_id = (int) $this->fk_user_author;
+		$this->user_modification_id = (int) $this->fk_user_modif;
 
 		if ($checkEntity) {
 			$authorizedEntities = function_exists('getEntity') ? explode(',', getEntity($this->element)) : array((string) ((int) $conf->entity));
@@ -289,6 +292,55 @@ class Raccordement extends CommonObject
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Notify native integrations after a contact link mutation.
+	 *
+	 * Contact links are written through CommonObject with their legacy contact
+	 * triggers disabled. The raccordement exposes the change through its single
+	 * CRUD update trigger and a stable business context instead.
+	 *
+	 * @param User $user User performing the operation
+	 * @param string $operation Contact operation (add, delete or status)
+	 * @param int $contactLineId Native element_contact row id when available
+	 * @return int
+	 */
+	public function triggerContactUpdate($user, $operation, $contactLineId = 0)
+	{
+		$this->context['trigger_reason'] = 'contact_change';
+		$this->context['changed_fields'] = array('contacts');
+		$this->context['contact_operation'] = $operation;
+		$this->context['contact_line_id'] = $contactLineId;
+
+		return $this->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $user);
+	}
+
+	/**
+	 * Check that a native element_contact row belongs to this raccordement.
+	 *
+	 * @param int $contactLineId Native element_contact row id
+	 * @return bool
+	 */
+	public function hasLinkedContactLine($contactLineId)
+	{
+		if ($contactLineId <= 0) {
+			return false;
+		}
+
+		foreach (array('internal', 'external') as $source) {
+			$contacts = $this->liste_contact(-1, $source);
+			if (!is_array($contacts)) {
+				continue;
+			}
+			foreach ($contacts as $contact) {
+				if (isset($contact['rowid']) && (int) $contact['rowid'] === $contactLineId) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -436,27 +488,33 @@ class Raccordement extends CommonObject
 		$labels = self::getStatusLabels();
 		$labelKey = isset($labels[$status]) ? $labels[$status] : 'RaccordementStatusUnknown';
 		$label = $langs->trans($labelKey);
-		$statusType = $status < 0 ? 6 : 0;
-
-		if ($status === 0) {
-			$statusType = 0;
-		} elseif ($status >= 1 && $status <= 7) {
-			$statusType = 1;
-		} elseif ($status >= 8 && $status <= 14) {
-			$statusType = 4;
-		} elseif ($status >= 15) {
-			$statusType = 5;
-		}
+		$statusTypes = array(
+			-1 => 8,
+			0 => 0,
+			1 => 0,
+			2 => 1,
+			3 => 1,
+			4 => 1,
+			5 => 3,
+			6 => 3,
+			7 => 3,
+			8 => 1,
+			9 => 1,
+			10 => 3,
+			11 => 1,
+			12 => 4,
+			13 => 3,
+			14 => 1,
+			15 => 4,
+			16 => 6,
+		);
+		$statusType = $statusTypes[(int) $status] ?? 0;
 
 		if ($mode === 0) {
 			return $label;
 		}
 
-		if (function_exists('dolGetStatus')) {
-			return dolGetStatus($label, '', '', 'status'.$statusType, $mode);
-		}
-
-		return '<span class="badge badge-status'.$statusType.'">'.dol_escape_htmltag($label).'</span>';
+		return dolGetStatus($label, '', '', 'status'.$statusType, $mode);
 	}
 
 	/**
@@ -551,7 +609,7 @@ class Raccordement extends CommonObject
 			12 => 'NextActionPrepareMES',
 			13 => 'NextActionRequestMES',
 			14 => 'NextActionFollowMES',
-			15 => 'NextActionClose',
+			15 => 'NextActionCompleteInternalData',
 			16 => 'NextActionNone',
 			-1 => 'NextActionNone',
 		);

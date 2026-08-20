@@ -215,7 +215,7 @@ print '<div class="fichehalfright"><div class="div-table-responsive-no-min"><tab
 print '<tr class="liste_titre"><td colspan="2">'.$langs->trans('LatestPublicLink').'</td></tr>';
 if ((int) $latestLink->id > 0) {
 	$linkStatusKey = (int) $latestLink->status < 0 ? 'PublicLinkStatusRevoked' : 'PublicLinkStatus'.((int) $latestLink->status);
-	$linkStatusType = (int) $latestLink->status === PublicLink::STATUS_SUBMITTED ? 'status4' : ((int) $latestLink->status === PublicLink::STATUS_ACTIVE ? 'status1' : 'status8');
+	$linkStatusType = (int) $latestLink->status === PublicLink::STATUS_SUBMITTED ? 'status1' : ((int) $latestLink->status === PublicLink::STATUS_ACTIVE ? 'status1' : 'status8');
 	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td>'.dolGetStatus($langs->trans($linkStatusKey), '', '', $linkStatusType, 5).'</td></tr>';
 	print '<tr><td>'.$langs->trans('Email').'</td><td>'.dol_escape_htmltag((string) $latestLink->email_destinataire).'</td></tr>';
 	print '<tr><td>'.$langs->trans('ExpirationDate').'</td><td>'.(!empty($latestLink->date_expiration) ? dol_print_date((int) $latestLink->date_expiration, 'dayhour') : '').'</td></tr>';

@@ -23,6 +23,9 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Synchronisation transactionnelle du bénéficiaire avec les Tiers et Contacts Dolibarr à partir du SIRET.
 - Sélection structurée des onduleurs et modules depuis le catalogue PowerPlantPV, avec quantités, instantanés de puissance et agrégats serveur.
 - Affichage des fichiers collectés et générés dans le répertoire documentaire et l’onglet natif `Fichiers joints`.
+- Pages indépendantes `Contacts/Adresses`, `Fichiers joints` et `Événements/Agenda`, basées directement sur les actions, gabarits et listes natifs Dolibarr.
+- Badges d’avancement harmonisés avec `dolGetStatus()`, clôture automatique du raccordement et réouverture sur la première étape obligatoire redevenue incomplète.
+- Consuel obligatoire fondé sur la date, la référence et une pièce documentaire native, avec verrouillage serveur de la demande de mise en service tant que le dossier n’est pas conforme.
 - Sélection des modèles de courriels depuis les modèles natifs Dolibarr par type d’objet.
 - Sélection native du modèle PDF du mandat ENEDIS dans les modèles de documents Dolibarr.
 - Onglets internes : Collecte client, Demande ENEDIS, CARDi, Convention / contrat, Mise en service, Relances.

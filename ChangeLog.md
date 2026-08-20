@@ -44,3 +44,6 @@
 - Ajout de la saisie contrôlée des puissances techniques manquantes via les API publiques PowerPlantPV, sans modification directe de son schéma.
 - Verrouillage serveur et masquage des actions devenues incohérentes avec les statuts courants des collectes, mandats, pièces, conventions et relances.
 - Généralisation des badges de statut Dolibarr natifs et ajout de la fonctionnalité conditionnelle PowerPlantPV dans l’onglet Compatibilité.
+- Séparation des onglets Contacts/Adresses, Fichiers joints et Événements/Agenda dans trois pages dédiées reprenant les gabarits natifs Dolibarr, avec types de contacts raccordement et compatibilité des anciennes URL.
+- Harmonisation des badges d’avancement avec les statuts natifs Dolibarr, clôture automatique lorsque toutes les étapes obligatoires sont terminées et réouverture après invalidation.
+- Suppression des booléens Consuel redondants du modèle actif, ajout de l’attestation Consuel comme pièce documentaire obligatoire et verrouillage de la demande de mise en service sur les prérequis réels du dossier.
