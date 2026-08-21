@@ -169,7 +169,7 @@ class RaccordementWorkflow
 	/**
 	 * Test whether every required stage is complete.
 	 *
-	 * Optional documents and CARDi explicitly marked as not required are ignored.
+	 * Optional documents and CARD-i outside its power scope or explicitly marked as not required are ignored.
 	 *
 	 * @param Raccordement $raccordement Parent object
 	 * @return bool
@@ -281,7 +281,10 @@ class RaccordementWorkflow
 		$cardiPowerApplicable = $raccordement->isCardiApplicable();
 		$cardiRequired = $cardiPowerApplicable && (int) $raccordement->cardi_required === 1;
 		$cardiApplicable = $cardiPowerApplicable && (int) $raccordement->cardi_required !== 0;
-		if ((int) $raccordement->cardi_required === 2) {
+		if (!$cardiPowerApplicable) {
+			$cardiLabels[(int) $raccordement->cardi_status] = 'CardiStatusNotRequired';
+			$cardiTypes[(int) $raccordement->cardi_status] = 'status0';
+		} elseif ((int) $raccordement->cardi_required === 2) {
 			$cardiLabels[(int) $raccordement->cardi_status] = 'CardiStatusToDetermine';
 			$cardiTypes[(int) $raccordement->cardi_status] = 'status0';
 		}
