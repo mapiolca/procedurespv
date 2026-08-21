@@ -20,19 +20,23 @@
 ### Étapes
 
 1. Créer un raccordement depuis `Raccordement > Nouveau raccordement`.
-2. Renseigner le client, le projet et l'identifiant Centrale PV.
-3. Enregistrer puis ouvrir l'onglet `Collecte client`.
-4. Générer un lien public de collecte.
-5. Ouvrir le lien public, compléter les informations, déposer une facture d'électricité et signer le mandat.
-6. Revenir côté interne, valider la pièce et le mandat.
-7. Ouvrir `Demande de raccordement`, renseigner la référence ENEDIS et marquer déposé.
-8. Vérifier que le snapshot est figé.
-9. Ajouter une convention, la marquer signée.
-10. Marquer la mise en service réalisée.
+2. Renseigner le client, le projet, l'identifiant Centrale PV et sélectionner `Centrale PV` comme source du site.
+3. Enregistrer puis vérifier que le nom du site, l'adresse, le code postal, la commune et le PRM/PDL disponibles dans la centrale sont repris dans le raccordement.
+4. Ouvrir l'onglet `Collecte client` et générer un lien public de collecte.
+5. Ouvrir le lien public et vérifier que les données du site de la centrale sont préremplies.
+6. Corriger au moins une donnée du site, compléter les informations, déposer une facture d'électricité et signer le mandat.
+7. Revenir côté interne et vérifier que la correction figure dans le raccordement et dans la centrale PV sélectionnée.
+8. Vérifier dans le tableau des pièces que l'origine commence par une majuscule et que l'absence de fichier affiche le libellé natif « Pas de documents téléversés ».
+9. Valider la pièce et le mandat.
+10. Ouvrir `Demande de raccordement`, renseigner la référence ENEDIS et marquer déposé.
+11. Vérifier que le snapshot est figé.
+12. Ajouter une convention, la marquer signée.
+13. Marquer la mise en service réalisée.
 
 ### Résultat attendu
 
 - Le raccordement avance jusqu'au statut `Mise en service réalisée`.
+- Les données disponibles de la centrale sont reprises dans le raccordement et la collecte, puis les corrections du mandat sont enregistrées dans les deux objets.
 - La pièce et le mandat signé sont visibles côté interne.
 - La convention signée fait évoluer le statut global vers `Convention / contrat signé`.
 - La mise en service réalisée crée un événement Agenda si Agenda est actif.

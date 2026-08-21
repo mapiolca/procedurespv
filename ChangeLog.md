@@ -51,3 +51,5 @@
 - Réordonnancement des onglets Raccordement selon le parcours métier, renommage de l’onglet documentaire en « Fichiers joints » et suppression des onglets Notes et Historique.
 - Ajout de l’autocomplétion des adresses françaises du bénéficiaire et du site de production via le service IGN Géoplateforme, avec adresse complète dans un champ unique et préremplissage de la commune, du code postal et du code INSEE lorsqu’il est disponible.
 - Affichage du bloc natif « Fichiers joints » sur la synthèse, avec ajout, aperçu, téléchargement, renommage et suppression selon les droits, et rendu natif `getNomUrl()` du tiers, du projet, de la centrale et du responsable.
+- Synchronisation bidirectionnelle des données du site lorsque la centrale PV est la source : préremplissage du raccordement et de la collecte, puis propagation des corrections du mandat vers le raccordement et l’objet Centrale PV natif.
+- Harmonisation du tableau des pièces de collecte : origine avec initiale majuscule et message natif `NoFileFound` lorsqu’aucun document n’est téléversé.

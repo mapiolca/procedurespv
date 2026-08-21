@@ -107,6 +107,10 @@ class CentralePVAdapter
 			}
 
 			$sql = 'SELECT * FROM '.$tableName.' WHERE rowid = '.$id;
+			$entityWhere = $this->getEntityWhereClause($tableName);
+			if ($entityWhere !== '') {
+				$sql .= ' AND '.$entityWhere;
+			}
 			$resql = $this->db->query($sql);
 			if (!$resql) {
 				$this->error = $this->db->lasterror();
@@ -310,6 +314,144 @@ class CentralePVAdapter
 			'type_exploitation' => $this->readFirstString($obj, array('type_exploitation', 'exploitation_type', 'connection_type')),
 			'type_pose' => $this->readFirstString($obj, array('type_pose', 'pose_type')),
 		);
+	}
+
+	/**
+	 * Return the site values provided by the Centrale selected as source.
+	 *
+	 * Empty source values are omitted so they never erase data already
+	 * collected on the grid connection during a prefill operation.
+	 *
+	 * @param Raccordement $raccordement Grid connection
+	 * @return array{site_name?:string,address?:string,zip?:string,town?:string,prm?:string}
+	 */
+	public function getRaccordementSourceSiteData($raccordement)
+	{
+		if (
+			!is_object($raccordement)
+			|| (string) $raccordement->site_source !== 'centralepv'
+			|| (int) $raccordement->fk_centrale_pv <= 0
+			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
+		) {
+			return array();
+		}
+
+		$siteData = $this->getSiteData((int) $raccordement->fk_centrale_pv);
+		$result = array();
+		foreach (array('site_name', 'address', 'zip', 'town', 'prm') as $key) {
+			if (!array_key_exists($key, $siteData) || $siteData[$key] === null) {
+				continue;
+			}
+			$value = trim((string) $siteData[$key]);
+			if ($value !== '') {
+				$result[$key] = $value;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Prefill the grid-connection snapshot from its Centrale source.
+	 *
+	 * @param Raccordement $raccordement Grid connection to update in memory
+	 * @return list<string> Changed Raccordement field names
+	 */
+	public function prefillRaccordementSiteData($raccordement)
+	{
+		$siteData = $this->getRaccordementSourceSiteData($raccordement);
+		$fieldMap = array(
+			'site_name_snapshot' => 'site_name',
+			'site_address_snapshot' => 'address',
+			'site_zip_snapshot' => 'zip',
+			'site_town_snapshot' => 'town',
+			'prm' => 'prm',
+		);
+		$changedFields = array();
+		foreach ($fieldMap as $targetField => $sourceField) {
+			if (!isset($siteData[$sourceField])) {
+				continue;
+			}
+			$value = (string) $siteData[$sourceField];
+			if ((string) $raccordement->{$targetField} === $value) {
+				continue;
+			}
+			$raccordement->{$targetField} = $value;
+			$changedFields[] = $targetField;
+		}
+
+		return $changedFields;
+	}
+
+	/**
+	 * Synchronize mandate site corrections back to the native Centrale object.
+	 *
+	 * @param int $id Centrale identifier
+	 * @param array{site_name:string,address:string,zip:string,town:string,prm:string} $siteData Submitted site data
+	 * @param User $user Acting workflow user
+	 * @return int 1 on success, -1 on error
+	 */
+	public function updateSiteData($id, array $siteData, $user)
+	{
+		$this->error = '';
+		$id = (int) $id;
+		if ($id <= 0 || !is_object($user) || !is_object($this->fetchCentrale($id))) {
+			$this->error = 'CentralePVSiteSynchronizationFailed';
+			return -1;
+		}
+
+		$nativeObject = $this->fetchCentraleNativeObject($id);
+		if (!is_object($nativeObject) || !method_exists($nativeObject, 'update')) {
+			$this->error = 'CentralePVSiteSynchronizationFailed';
+			dol_syslog(__METHOD__.' native Centrale object unavailable for id '.$id, LOG_ERR);
+			return -1;
+		}
+
+		$propertyCandidates = array(
+			'site_name' => array('label', 'nom', 'name'),
+			'address' => array('address', 'site_address', 'adresse'),
+			'zip' => array('zip', 'site_zip', 'cp', 'code_postal'),
+			'town' => array('town', 'site_town', 'ville'),
+			'prm' => array('prm_pdl_number', 'prm_pdl', 'prm', 'pdl'),
+		);
+		$oldcopy = clone $nativeObject;
+		$nativeFields = isset($nativeObject->fields) && is_array($nativeObject->fields) ? $nativeObject->fields : array();
+		$changedProperties = array();
+		foreach ($propertyCandidates as $sourceField => $candidates) {
+			$value = array_key_exists($sourceField, $siteData) ? trim((string) $siteData[$sourceField]) : '';
+			$targetProperty = '';
+			foreach ($candidates as $candidate) {
+				if (property_exists($nativeObject, $candidate) || array_key_exists($candidate, $nativeFields)) {
+					$targetProperty = $candidate;
+					break;
+				}
+			}
+			if ($targetProperty === '' || (string) $nativeObject->{$targetProperty} === $value) {
+				continue;
+			}
+			$nativeObject->{$targetProperty} = $value;
+			$changedProperties[] = $targetProperty;
+		}
+
+		if (empty($changedProperties)) {
+			return 1;
+		}
+
+		$nativeObject->oldcopy = $oldcopy;
+		if (!isset($nativeObject->context) || !is_array($nativeObject->context)) {
+			$nativeObject->context = array();
+		}
+		$nativeObject->context['trigger_reason'] = 'procedurespv_mandate_site_sync';
+		$nativeObject->context['changed_fields'] = $changedProperties;
+		$result = $nativeObject->update($user);
+		if (!is_int($result) || $result <= 0) {
+			$nativeError = isset($nativeObject->error) ? trim((string) $nativeObject->error) : '';
+			dol_syslog(__METHOD__.' failed for Centrale id '.$id.($nativeError !== '' ? ': '.$nativeError : ''), LOG_ERR);
+			$this->error = 'CentralePVSiteSynchronizationFailed';
+			return -1;
+		}
+
+		return 1;
 	}
 
 	/**

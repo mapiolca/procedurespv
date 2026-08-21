@@ -22,6 +22,7 @@ require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/beneficiarysync.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formcompany.class.php';
@@ -484,6 +485,9 @@ if (!isModEnabled('procedurespv')) {
 $publicLink = new PublicLink($db);
 $linkLoaded = $publicToken !== '' ? $publicLink->fetchByToken($publicToken, PublicLink::TYPE_COLLECTE_RACCORDEMENT) : 0;
 $object = new Raccordement($db);
+$centralePVAdapter = new CentralePVAdapter($db);
+$centraleSourceSiteData = array();
+$centraleChangedFields = array();
 $linkObjectLoaded = false;
 if ($linkLoaded > 0) {
 	$result = $object->fetch((int) $publicLink->fk_raccordement, null, 0);
@@ -491,6 +495,9 @@ if ($linkLoaded > 0) {
 		$linkLoaded = 0;
 	} else {
 		$linkObjectLoaded = true;
+		$object->oldcopy = clone $object;
+		$centraleSourceSiteData = $centralePVAdapter->getRaccordementSourceSiteData($object);
+		$centraleChangedFields = $centralePVAdapter->prefillRaccordementSiteData($object);
 	}
 }
 $linkExpired = $linkLoaded > 0 && !empty($publicLink->date_expiration) && (int) $publicLink->date_expiration < dol_now();
@@ -657,6 +664,15 @@ if (!$isSubmitCollecte) {
 	}
 }
 
+// A Centrale selected as site source remains authoritative over an older collection revision.
+if (!$isSubmitCollecte && !empty($centraleSourceSiteData)) {
+	$formSiteName = isset($centraleSourceSiteData['site_name']) ? (string) $centraleSourceSiteData['site_name'] : $formSiteName;
+	$formSiteAddress = isset($centraleSourceSiteData['address']) ? (string) $centraleSourceSiteData['address'] : $formSiteAddress;
+	$formSiteZip = isset($centraleSourceSiteData['zip']) ? (string) $centraleSourceSiteData['zip'] : $formSiteZip;
+	$formSiteTown = isset($centraleSourceSiteData['town']) ? (string) $centraleSourceSiteData['town'] : $formSiteTown;
+	$formPrm = isset($centraleSourceSiteData['prm']) ? (string) $centraleSourceSiteData['prm'] : $formPrm;
+}
+
 if ($legacyBeneficiaryStreetNumber !== '') {
 	$legacyAddressPrefix = trim($legacyBeneficiaryStreetNumber).' ';
 	if (strncmp($formHeadquartersAddress, $legacyAddressPrefix, strlen($legacyAddressPrefix)) !== 0) {
@@ -668,11 +684,17 @@ if ($linkUsable && $action !== 'submit_collecte') {
 	$ip = function_exists('getUserRemoteIP') ? getUserRemoteIP() : (isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '');
 	$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
 	$publicLink->logAccess($ip, $userAgent);
-	if (empty($object->date_collecte_ouverture)) {
-		$object->date_collecte_ouverture = dol_now();
-		$object->context['trigger_reason'] = 'public_collecte_opened';
-		$object->context['changed_fields'] = array('date_collecte_ouverture');
-		$object->update($user);
+	if (empty($object->date_collecte_ouverture) || !empty($centraleChangedFields)) {
+		$changedFields = $centraleChangedFields;
+		if (empty($object->date_collecte_ouverture)) {
+			$object->date_collecte_ouverture = dol_now();
+			$changedFields[] = 'date_collecte_ouverture';
+		}
+		$object->context['trigger_reason'] = !empty($centraleChangedFields) ? 'centralepv_site_prefill' : 'public_collecte_opened';
+		$object->context['changed_fields'] = array_values(array_unique($changedFields));
+		if ($object->update($user) <= 0) {
+			setEventMessages($object->error, $object->errors, 'errors');
+		}
 	}
 }
 
@@ -1009,6 +1031,15 @@ if ($linkUsable && $action === 'submit_collecte') {
 				$result = $object->update($workflowUser);
 			}
 		}
+		if ($result > 0 && (string) $object->site_source === 'centralepv' && (int) $object->fk_centrale_pv > 0) {
+			$result = $centralePVAdapter->updateSiteData((int) $object->fk_centrale_pv, array(
+				'site_name' => $siteName,
+				'address' => $siteAddress,
+				'zip' => $siteZip,
+				'town' => $siteTown,
+				'prm' => $prm,
+			), $workflowUser);
+		}
 		if ($result > 0) {
 			$result = $publicLink->markSubmitted();
 		}
@@ -1022,8 +1053,8 @@ if ($linkUsable && $action === 'submit_collecte') {
 			$submittedLinkAvailable = true;
 			setEventMessages($langs->trans('PublicCollecteSubmitted'), null, 'mesgs');
 		} else {
-			$errorMessage = !is_object($workflowUser) ? 'PublicWorkflowUserUnavailable' : ($beneficiarySync->error !== '' ? $beneficiarySync->error : ($collectionService->error !== '' ? $collectionService->error : ($publicLink->error !== '' ? $publicLink->error : $object->error)));
-			setEventMessages($errorMessage, null, 'errors');
+			$errorMessage = !is_object($workflowUser) ? 'PublicWorkflowUserUnavailable' : ($centralePVAdapter->error !== '' ? $centralePVAdapter->error : ($beneficiarySync->error !== '' ? $beneficiarySync->error : ($collectionService->error !== '' ? $collectionService->error : ($publicLink->error !== '' ? $publicLink->error : $object->error))));
+			setEventMessages($langs->trans($errorMessage), null, 'errors');
 		}
 	} else {
 		setEventMessages('', $uploadErrors, 'errors');

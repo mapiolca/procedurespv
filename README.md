@@ -26,6 +26,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Autocomplétion des adresses françaises du bénéficiaire et du site de production avec le service de géocodage IGN Géoplateforme alimenté par la Base Adresse Nationale ; le navigateur transmet uniquement le texte recherché à `data.geopf.fr` et la saisie manuelle reste disponible en cas d’indisponibilité du service.
 - Bloc natif de fichiers joints directement sur la synthèse du raccordement, avec actions documentaires soumises aux droits Dolibarr.
 - Affichage natif des tiers, projets, centrales photovoltaïques et responsables liés via le `getNomUrl()` de leur objet.
+- Lorsque la centrale PV est la source du site, reprise automatique des données disponibles de la centrale dans le raccordement et la collecte ; les corrections saisies lors du mandat sont répercutées dans le raccordement et dans l’objet Centrale PV natif.
 - Pages indépendantes `Contacts/Adresses`, `Fichiers joints` et `Événements/Agenda`, basées directement sur les actions, gabarits et listes natifs Dolibarr.
 - Badges d’avancement harmonisés avec `dolGetStatus()`, clôture automatique du raccordement et réouverture sur la première étape obligatoire redevenue incomplète.
 - Consuel obligatoire fondé sur la date, la référence et une pièce documentaire native, avec verrouillage serveur de la demande de mise en service tant que le dossier n’est pas conforme.

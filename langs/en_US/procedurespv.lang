@@ -39,6 +39,7 @@ SetupProceduresPV=Configure PV Procedures
 CentralePV=PV plant
 CentralePVAdapterAvailable=PV plant module detected.
 CentralePVAdapterUnavailable=PV plant module not detected; this grid connection remains standalone.
+CentralePVSiteSynchronizationFailed=The site data could not be synchronized with the PV plant.
 ProjectModuleDisabled=Projects module is disabled.
 SiteSource=Site source
 SiteSourceLocal=Local site

@@ -39,6 +39,7 @@ SetupProceduresPV=Configurer le module Procédures PV
 CentralePV=Centrale PV
 CentralePVAdapterAvailable=Module Centrale PV détecté.
 CentralePVAdapterUnavailable=Module Centrale PV non détecté ; le raccordement reste autonome.
+CentralePVSiteSynchronizationFailed=Les données du site n’ont pas pu être synchronisées avec la centrale PV.
 ProjectModuleDisabled=Le module Projets est désactivé.
 SiteSource=Source du site
 SiteSourceLocal=Site local

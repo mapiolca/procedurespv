@@ -9,6 +9,7 @@ require_once dol_buildpath('/procedurespv/class/publiclink.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 $langs->loadLangs(array('companies', 'documents', 'procedurespv@procedurespv'));
@@ -50,7 +51,9 @@ if ($action === 'generate_link') {
 	}
 	$email = GETPOST('email_destinataire', 'restricthtml');
 	$newLink = new PublicLink($db);
+	$centralePVAdapter = new CentralePVAdapter($db);
 	$db->begin();
+	$centraleChangedFields = $centralePVAdapter->prefillRaccordementSiteData($object);
 	$rawToken = $newLink->createForRaccordement($object, PublicLink::TYPE_COLLECTE_RACCORDEMENT, $email, getDolGlobalInt('PROCEDURESPV_PUBLICLINK_VALIDITY_DAYS', 30));
 	if ($rawToken !== '') {
 		$result = 1;
@@ -66,7 +69,7 @@ if ($action === 'generate_link') {
 		$object->date_collecte_envoi = dol_now();
 		$object->status = 2;
 		$object->context['trigger_reason'] = empty($prefillPayload) ? 'collection_link_created' : 'collection_reopened';
-		$object->context['changed_fields'] = array('status', 'date_collecte_envoi');
+		$object->context['changed_fields'] = array_values(array_unique(array_merge(array('status', 'date_collecte_envoi'), $centraleChangedFields)));
 		if ($result > 0) {
 			$result = $object->update($user);
 		}
@@ -234,13 +237,13 @@ if (!empty($pieces)) {
 		$previewData = $relativePath !== '' ? getAdvancedPreviewUrl('procedurespv', $relativePath, 1, '&entity='.(int) $object->entity) : array();
 		$previewUrl = is_array($previewData) && !empty($previewData['url']) ? $previewData['url'] : ($relativePath !== '' ? procedurespvGetRaccordementDocumentUrl($object, (string) $piece->filename) : '');
 		$previewMime = is_array($previewData) && !empty($previewData['mime']) ? (string) $previewData['mime'] : dol_mimetype((string) $piece->filename);
-		print '<tr class="oddeven"><td>'.dol_escape_htmltag((string) $piece->label).'</td><td>'.dol_escape_htmltag((string) $piece->origin).'</td><td class="center">'.$piece->getLibStatut(5).'</td><td>';
+		print '<tr class="oddeven"><td>'.dol_escape_htmltag((string) $piece->label).'</td><td>'.dol_escape_htmltag(dol_ucfirst((string) $piece->origin)).'</td><td class="center">'.$piece->getLibStatut(5).'</td><td>';
 		if ($piece->filename !== '') {
 			print '<a class="documentpreview" mime="'.dol_escape_htmltag($previewMime).'" target="_blank" rel="noopener" href="'.dol_escape_htmltag($previewUrl).'">'.dol_escape_htmltag((string) $piece->filename).'</a> ';
 			print '<button type="button" class="reposition pvproc-piece-preview" data-preview-url="'.dol_escape_htmltag($previewUrl).'" data-piece-id="'.(int) $piece->id.'" data-can-validate="'.(($permissiontovalidate && (int) $object->status < 6 && (int) $piece->status === Piece::STATUS_TO_CONTROL) ? '1' : '0').'" title="'.dol_escape_htmltag($langs->trans('Preview')).'">'.img_picto($langs->trans('Preview'), 'search').'</button> ';
 			print '<a href="'.dol_escape_htmltag(procedurespvGetRaccordementDocumentUrl($object, (string) $piece->filename, true)).'">'.img_picto($langs->trans('Download'), 'download').'</a>';
 		} else {
-			print '<span class="opacitymedium">'.$langs->trans('NoFile').'</span>';
+			print '<span class="opacitymedium">'.$langs->trans('NoFileFound').'</span>';
 		}
 		print '</td>';
 		if ($pieceActionColumn) {

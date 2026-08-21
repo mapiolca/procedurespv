@@ -322,6 +322,7 @@ if ($action === 'add' && $permissiontoadd) {
 	$object->fk_user_resp = GETPOSTINT('fk_user_resp') > 0 ? GETPOSTINT('fk_user_resp') : null;
 	$object->note_public = GETPOST('note_public', 'restricthtml');
 	$object->note_private = GETPOST('note_private', 'restricthtml');
+	$centralePVAdapter->prefillRaccordementSiteData($object);
 
 	$result = $object->create($user);
 	if ($result > 0) {
@@ -354,6 +355,11 @@ if ($action === 'update' && $permissiontoadd && $object->id > 0) {
 	$object->fk_user_resp = GETPOSTINT('fk_user_resp') > 0 ? GETPOSTINT('fk_user_resp') : null;
 	$object->note_public = GETPOST('note_public', 'restricthtml');
 	$object->note_private = GETPOST('note_private', 'restricthtml');
+	$centraleChangedFields = $centralePVAdapter->prefillRaccordementSiteData($object);
+	if (!empty($centraleChangedFields)) {
+		$object->context['trigger_reason'] = 'centralepv_site_prefill';
+		$object->context['changed_fields'] = $centraleChangedFields;
+	}
 
 	$result = $object->update($user);
 	if ($result > 0) {
@@ -446,6 +452,13 @@ if ($action === 'updatefield' && $permissiontoadd && $object->id > 0) {
 			$object->fk_user_resp = GETPOSTINT('fieldvalue') > 0 ? GETPOSTINT('fieldvalue') : null;
 			break;
 	}
+	if (in_array($field, array('fk_centrale_pv', 'site_source'), true)) {
+		$centraleChangedFields = $centralePVAdapter->prefillRaccordementSiteData($object);
+		if (!empty($centraleChangedFields)) {
+			$object->context['trigger_reason'] = 'centralepv_site_prefill';
+			$object->context['changed_fields'] = array_values(array_unique(array_merge($object->context['changed_fields'], $centraleChangedFields)));
+		}
+	}
 
 	$result = $object->update($user);
 	if ($result > 0) {
@@ -535,6 +548,7 @@ if ($action === 'freeze_snapshot' && $object->id > 0) {
 	if (!empty($object->date_snapshot)) {
 		accessforbidden($langs->trans('SnapshotAlreadyFrozen'));
 	}
+	$centralePVAdapter->prefillRaccordementSiteData($object);
 
 	$result = $object->freezeSnapshot($user);
 	if ($result > 0) {
@@ -545,6 +559,11 @@ if ($action === 'freeze_snapshot' && $object->id > 0) {
 	}
 
 	setEventMessages($object->error, $object->errors, 'errors');
+}
+
+// Hydrate the displayed site from its declared source without mutating data during a read-only request.
+if ((int) $object->id > 0 && !in_array($action, array('add', 'update', 'updatefield'), true)) {
+	$centralePVAdapter->prefillRaccordementSiteData($object);
 }
 
 $modulepart = 'procedurespv';
