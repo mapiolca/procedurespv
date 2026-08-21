@@ -671,6 +671,8 @@ if (!$isSubmitCollecte && !empty($centraleSourceSiteData)) {
 	$formSiteZip = isset($centraleSourceSiteData['zip']) ? (string) $centraleSourceSiteData['zip'] : $formSiteZip;
 	$formSiteTown = isset($centraleSourceSiteData['town']) ? (string) $centraleSourceSiteData['town'] : $formSiteTown;
 	$formPrm = isset($centraleSourceSiteData['prm']) ? (string) $centraleSourceSiteData['prm'] : $formPrm;
+	$formPuissanceInstallee = isset($centraleSourceSiteData['puissance_installee_kwc']) ? (string) $centraleSourceSiteData['puissance_installee_kwc'] : $formPuissanceInstallee;
+	$formPuissanceInjection = isset($centraleSourceSiteData['puissance_injection_kva']) ? (string) $centraleSourceSiteData['puissance_injection_kva'] : $formPuissanceInjection;
 }
 
 if ($legacyBeneficiaryStreetNumber !== '') {
@@ -1038,6 +1040,8 @@ if ($linkUsable && $action === 'submit_collecte') {
 				'zip' => $siteZip,
 				'town' => $siteTown,
 				'prm' => $prm,
+				'puissance_installee_kwc' => $puissanceInstallee,
+				'puissance_injection_kva' => $puissanceInjection,
 			), $workflowUser);
 		}
 		if ($result > 0) {

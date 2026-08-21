@@ -54,3 +54,4 @@
 - Synchronisation bidirectionnelle des données du site lorsque la centrale PV est la source : préremplissage du raccordement et de la collecte, puis propagation des corrections du mandat vers le raccordement et l’objet Centrale PV natif.
 - Harmonisation du tableau des pièces de collecte : origine avec initiale majuscule et message natif `NoFileFound` lorsqu’aucun document n’est téléversé.
 - Affichage conditionnel de l’onglet CARD-i uniquement lorsque la puissance de raccordement demandée ou la puissance souscrite en soutirage est strictement supérieure à 36 kVA, avec protection identique de l’accès direct et du workflow.
+- Extension de la synchronisation Centrale PV aux puissances installée et de raccordement, et remplacement du libellé « Puissance injectée » par « Puissance du raccordement ».

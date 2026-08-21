@@ -323,7 +323,7 @@ class CentralePVAdapter
 	 * collected on the grid connection during a prefill operation.
 	 *
 	 * @param Raccordement $raccordement Grid connection
-	 * @return array{site_name?:string,address?:string,zip?:string,town?:string,prm?:string}
+	 * @return array{site_name?:string,address?:string,zip?:string,town?:string,prm?:string,puissance_installee_kwc?:string,puissance_injection_kva?:string}
 	 */
 	public function getRaccordementSourceSiteData($raccordement)
 	{
@@ -338,7 +338,7 @@ class CentralePVAdapter
 
 		$siteData = $this->getSiteData((int) $raccordement->fk_centrale_pv);
 		$result = array();
-		foreach (array('site_name', 'address', 'zip', 'town', 'prm') as $key) {
+		foreach (array('site_name', 'address', 'zip', 'town', 'prm', 'puissance_installee_kwc', 'puissance_injection_kva') as $key) {
 			if (!array_key_exists($key, $siteData) || $siteData[$key] === null) {
 				continue;
 			}
@@ -366,14 +366,18 @@ class CentralePVAdapter
 			'site_zip_snapshot' => 'zip',
 			'site_town_snapshot' => 'town',
 			'prm' => 'prm',
+			'puissance_installee_kwc' => 'puissance_installee_kwc',
+			'puissance_injection_kva' => 'puissance_injection_kva',
 		);
 		$changedFields = array();
 		foreach ($fieldMap as $targetField => $sourceField) {
 			if (!isset($siteData[$sourceField])) {
 				continue;
 			}
-			$value = (string) $siteData[$sourceField];
-			if ((string) $raccordement->{$targetField} === $value) {
+			$isPowerField = in_array($targetField, array('puissance_installee_kwc', 'puissance_injection_kva'), true);
+			$value = $isPowerField ? price2num((string) $siteData[$sourceField]) : (string) $siteData[$sourceField];
+			$currentValue = $isPowerField ? price2num((string) $raccordement->{$targetField}) : (string) $raccordement->{$targetField};
+			if ((string) $currentValue === (string) $value) {
 				continue;
 			}
 			$raccordement->{$targetField} = $value;
@@ -387,7 +391,7 @@ class CentralePVAdapter
 	 * Synchronize mandate site corrections back to the native Centrale object.
 	 *
 	 * @param int $id Centrale identifier
-	 * @param array{site_name:string,address:string,zip:string,town:string,prm:string} $siteData Submitted site data
+	 * @param array{site_name:string,address:string,zip:string,town:string,prm:string,puissance_installee_kwc:string,puissance_injection_kva:string} $siteData Submitted site data
 	 * @param User $user Acting workflow user
 	 * @return int 1 on success, -1 on error
 	 */
@@ -413,12 +417,18 @@ class CentralePVAdapter
 			'zip' => array('zip', 'site_zip', 'cp', 'code_postal'),
 			'town' => array('town', 'site_town', 'ville'),
 			'prm' => array('prm_pdl_number', 'prm_pdl', 'prm', 'pdl'),
+			'puissance_installee_kwc' => array('installed_power', 'puissance_installee_kwc', 'power_kwc', 'puissance'),
+			'puissance_injection_kva' => array('connection_contract_power', 'puissance_injection_kva', 'injection_kva', 'puissance_injection'),
 		);
 		$oldcopy = clone $nativeObject;
 		$nativeFields = isset($nativeObject->fields) && is_array($nativeObject->fields) ? $nativeObject->fields : array();
 		$changedProperties = array();
 		foreach ($propertyCandidates as $sourceField => $candidates) {
+			$isPowerField = in_array($sourceField, array('puissance_installee_kwc', 'puissance_injection_kva'), true);
 			$value = array_key_exists($sourceField, $siteData) ? trim((string) $siteData[$sourceField]) : '';
+			if ($isPowerField) {
+				$value = price2num($value);
+			}
 			$targetProperty = '';
 			foreach ($candidates as $candidate) {
 				if (property_exists($nativeObject, $candidate) || array_key_exists($candidate, $nativeFields)) {
@@ -426,7 +436,11 @@ class CentralePVAdapter
 					break;
 				}
 			}
-			if ($targetProperty === '' || (string) $nativeObject->{$targetProperty} === $value) {
+			$currentValue = $targetProperty !== '' ? (string) $nativeObject->{$targetProperty} : '';
+			if ($isPowerField) {
+				$currentValue = price2num($currentValue);
+			}
+			if ($targetProperty === '' || (string) $currentValue === (string) $value) {
 				continue;
 			}
 			$nativeObject->{$targetProperty} = $value;
