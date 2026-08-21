@@ -558,7 +558,7 @@ $formBeneficiaryCivility = $isSubmitCollecte ? GETPOST('beneficiary_civility', '
 $formRepresentativeLastname = $isSubmitCollecte ? GETPOST('representative_lastname', 'restricthtml') : '';
 $formRepresentativeFirstname = $isSubmitCollecte ? GETPOST('representative_firstname', 'restricthtml') : '';
 $formRepresentativeMobile = $isSubmitCollecte ? GETPOST('representative_mobile', 'alphanohtml') : '';
-$formBeneficiaryStreetNumber = $isSubmitCollecte ? GETPOST('beneficiary_street_number', 'restricthtml') : '';
+$legacyBeneficiaryStreetNumber = '';
 $formHeadquartersAddress = $isSubmitCollecte ? GETPOST('headquarters_address', 'restricthtml') : '';
 $formBeneficiaryAddressComplement = $isSubmitCollecte ? GETPOST('beneficiary_address_complement', 'restricthtml') : '';
 $formHeadquartersZip = $isSubmitCollecte ? GETPOST('headquarters_zip', 'alphanohtml') : '';
@@ -625,7 +625,7 @@ if (!$isSubmitCollecte) {
 		$formRepresentativeLastname = (string) ($contactPayload['lastname'] ?? '');
 		$formRepresentativeFirstname = (string) ($contactPayload['firstname'] ?? '');
 		$formRepresentativeMobile = (string) ($contactPayload['mobile'] ?? '');
-		$formBeneficiaryStreetNumber = (string) ($contactPayload['street_number'] ?? '');
+		$legacyBeneficiaryStreetNumber = (string) ($contactPayload['street_number'] ?? '');
 		$formHeadquartersAddress = (string) ($contactPayload['address'] ?? '');
 		$formBeneficiaryAddressComplement = (string) ($contactPayload['address_complement'] ?? '');
 		$formHeadquartersZip = (string) ($contactPayload['zip'] ?? '');
@@ -654,6 +654,13 @@ if (!$isSubmitCollecte) {
 		$formNoRelatedProjectAttestation = (string) ($productionPayload['no_related_project_attestation'] ?? $formNoRelatedProjectAttestation);
 		$formRelatedProjectReferences = (string) ($productionPayload['related_project_references'] ?? '');
 		$formEnedisRequestType = (string) ($productionPayload['enedis_request_type'] ?? $formEnedisRequestType);
+	}
+}
+
+if ($legacyBeneficiaryStreetNumber !== '') {
+	$legacyAddressPrefix = trim($legacyBeneficiaryStreetNumber).' ';
+	if (strncmp($formHeadquartersAddress, $legacyAddressPrefix, strlen($legacyAddressPrefix)) !== 0) {
+		$formHeadquartersAddress = trim($legacyAddressPrefix.$formHeadquartersAddress);
 	}
 }
 
@@ -691,7 +698,6 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$representativeLastname = $formRepresentativeLastname;
 	$representativeFirstname = $formRepresentativeFirstname;
 	$representativeMobile = $formRepresentativeMobile;
-	$beneficiaryStreetNumber = $formBeneficiaryStreetNumber;
 	$headquartersAddress = $formHeadquartersAddress;
 	$beneficiaryAddressComplement = $formBeneficiaryAddressComplement;
 	$headquartersZip = $formHeadquartersZip;
@@ -779,7 +785,6 @@ if ($linkUsable && $action === 'submit_collecte') {
 			'lastname' => $representativeLastname,
 			'firstname' => $representativeFirstname,
 			'mobile' => $representativeMobile,
-			'street_number' => $beneficiaryStreetNumber,
 			'address' => $headquartersAddress,
 			'address_complement' => $beneficiaryAddressComplement,
 			'zip' => $headquartersZip,
@@ -1248,6 +1253,56 @@ body.page-public-collecte div.fiche {
 .public-form-table .select2-container {
 	width: min(100%, 560px) !important;
 }
+.public-address-autocomplete {
+	position: relative;
+	width: min(100%, 560px);
+}
+.public-address-autocomplete input.flat {
+	width: 100%;
+}
+.public-address-suggestions {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	right: 0;
+	z-index: 20;
+	max-height: 260px;
+	overflow-y: auto;
+	border: 1px solid #b8c8c3;
+	border-radius: 6px;
+	background: #fff;
+	box-shadow: 0 12px 24px rgba(16, 24, 40, 0.14);
+}
+.public-address-suggestion,
+.public-address-suggestion-status {
+	display: block;
+	width: 100%;
+	margin: 0;
+	border: 0;
+	border-bottom: 1px solid #e4ece9;
+	border-radius: 0;
+	padding: 9px 11px;
+	text-align: left;
+	color: #26323d;
+	background: #fff;
+}
+.public-address-suggestion {
+	cursor: pointer;
+}
+.public-address-suggestion:last-child,
+.public-address-suggestion-status:last-child {
+	border-bottom: 0;
+}
+.public-address-suggestion:hover,
+.public-address-suggestion:focus,
+.public-address-suggestion[aria-selected="true"] {
+	outline: none;
+	color: #0b5f59;
+	background: #edf7f4;
+}
+.public-address-suggestion-status {
+	color: #66737f;
+}
 .public-help {
 	display: block;
 	max-width: 620px;
@@ -1440,6 +1495,13 @@ foreach ($beneficiaryStatuses as $value => $labelKey) {
 print '</select>'.ajax_combobox('client_type').'</td></tr>';
 print '<tr class="public-beneficiary-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('CompanyWithoutSiret').'</td><td>'.$form->selectyesno('company_without_siret', $formCompanyWithoutSiret, 1, false, 0, 1).'<span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
 $siretLookupUrl = $_SERVER['PHP_SELF'].'?public_token='.urlencode($publicToken).'&action=lookup_siret';
+$addressAutocompleteUrl = 'https://data.geopf.fr/geocodage/search';
+$franceCountryId = (int) getCountry('FR', '3', $db, $langs, 0);
+$addressAutocompleteData = ' data-address-api-url="'.dol_escape_htmltag($addressAutocompleteUrl).'"';
+$addressAutocompleteData .= ' data-loading-label="'.dol_escape_htmltag($langs->trans('AddressAutocompleteLoading')).'"';
+$addressAutocompleteData .= ' data-no-result-label="'.dol_escape_htmltag($langs->trans('AddressAutocompleteNoResult')).'"';
+$addressAutocompleteData .= ' data-unavailable-label="'.dol_escape_htmltag($langs->trans('AddressAutocompleteUnavailable')).'"';
+$franceCountryData = $franceCountryId > 0 ? ' data-country-target="beneficiary_country_id" data-country-id="'.$franceCountryId.'"' : '';
 print '<tr class="public-beneficiary-nonindividual-row" id="client-siret-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$langs->trans('BeneficiarySiret').'</td><td><input type="text" class="flat minwidth200" name="client_siret" id="client_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-beneficiary-nonindividual-required="1" data-lookup-url="'.dol_escape_htmltag($siretLookupUrl).'" value="'.dol_escape_htmltag($formClientSiret).'"><span class="public-help">'.$langs->trans('BeneficiarySiretHelp').'</span></td></tr>';
 $organizationLabel = '<span id="beneficiary_organization_name_label" data-company-label="'.dol_escape_htmltag($langs->trans('BeneficiaryCompanyName')).'" data-public-label="'.dol_escape_htmltag($langs->trans('BeneficiaryPublicEntityName')).'" data-administration-label="'.dol_escape_htmltag($langs->trans('BeneficiaryAdministrationName')).'">'.$langs->trans($formClientType === 'societe' ? 'BeneficiaryCompanyName' : ($formClientType === 'collectivite' ? 'BeneficiaryPublicEntityName' : 'BeneficiaryAdministrationName')).'</span>';
 print '<tr class="public-beneficiary-nonindividual-row"'.($formClientType === 'particulier' ? ' hidden' : '').'><td>'.$organizationLabel.'</td><td><input type="text" class="flat minwidth500" name="client_name" autocomplete="organization" data-beneficiary-nonindividual-required="1" value="'.dol_escape_htmltag($formClientName).'"></td></tr>';
@@ -1456,12 +1518,11 @@ print '<tr><td>'.$langs->trans('BeneficiaryCivility').'</td><td>'.$formcompany->
 print '<tr><td>'.$langs->trans('Email').'</td><td><input type="email" class="flat minwidth300" name="client_email" autocomplete="email" data-beneficiary-required="1" value="'.dol_escape_htmltag($formClientEmail).'"></td></tr>';
 print '<tr><td>'.$langs->trans('BeneficiaryLastname').'</td><td><input type="text" class="flat minwidth300" name="representative_lastname" id="representative_lastname" autocomplete="family-name" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeLastname).'"></td></tr>';
 print '<tr><td>'.$langs->trans('BeneficiaryFirstname').'</td><td><input type="text" class="flat minwidth300" name="representative_firstname" id="representative_firstname" autocomplete="given-name" data-beneficiary-required="1" value="'.dol_escape_htmltag($formRepresentativeFirstname).'"></td></tr>';
-print '<tr><td>'.$langs->trans('BeneficiaryStreetNumber').'</td><td><input type="text" class="flat maxwidth100" name="beneficiary_street_number" autocomplete="address-line1" value="'.dol_escape_htmltag($formBeneficiaryStreetNumber).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
-print '<tr><td>'.$langs->trans('BeneficiaryAddress').'</td><td><input type="text" class="flat minwidth500" name="headquarters_address" autocomplete="address-line1" maxlength="33" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersAddress).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryAddress').'</td><td><div class="public-address-autocomplete"'.$addressAutocompleteData.$franceCountryData.' data-address-mode="full" data-zip-target="headquarters_zip" data-town-target="headquarters_town" data-insee-target="beneficiary_town_insee_code"><input type="text" class="flat minwidth500" name="headquarters_address" autocomplete="address-line1" maxlength="33" data-beneficiary-required="1" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="headquarters-address-suggestions" value="'.dol_escape_htmltag($formHeadquartersAddress).'"><div class="public-address-suggestions" id="headquarters-address-suggestions" role="listbox" aria-label="'.dol_escape_htmltag($langs->trans('AddressAutocompleteSuggestions')).'" hidden></div></div><span class="public-help">'.$langs->trans('AddressAutocompleteHelp').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('BeneficiaryAddressComplement').'</td><td><input type="text" class="flat minwidth500" name="beneficiary_address_complement" autocomplete="address-line2" value="'.dol_escape_htmltag($formBeneficiaryAddressComplement).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="headquarters_town" autocomplete="address-level2" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersTown).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="headquarters_zip" autocomplete="postal-code" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersZip).'"></td></tr>';
-print '<tr><td>'.$langs->trans('BeneficiaryTownInseeCode').'</td><td><input type="text" class="flat maxwidth100" name="beneficiary_town_insee_code" maxlength="5" inputmode="numeric" data-beneficiary-required="1" value="'.dol_escape_htmltag($formBeneficiaryTownInseeCode).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="headquarters_zip" autocomplete="postal-code" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" data-beneficiary-required="1" value="'.dol_escape_htmltag($formHeadquartersZip).'"></td></tr>';
+print '<tr><td>'.$langs->trans('BeneficiaryTownInseeCode').'</td><td><input type="text" class="flat maxwidth100" name="beneficiary_town_insee_code" maxlength="5" pattern="[0-9A-Za-z]{5}" data-beneficiary-required="1" value="'.dol_escape_htmltag($formBeneficiaryTownInseeCode).'"></td></tr>';
 print '<tr><td>'.$langs->trans('Country').' <span class="opacitymedium">('.$langs->trans('PublicOptionalField').')</span></td><td>'.$form->select_country($formBeneficiaryCountryId, 'beneficiary_country_id', '', 0, 'minwidth300', '', 1).'</td></tr>';
 print '<tr><td>'.$langs->trans('BeneficiaryCedex').'</td><td><input type="text" class="flat minwidth200" name="beneficiary_cedex" value="'.dol_escape_htmltag($formBeneficiaryCedex).'"><span class="public-help">'.$langs->trans('PublicOptionalField').'</span></td></tr>';
 print '<tr><td>'.$langs->trans('Phone').'</td><td><input type="text" class="flat minwidth200" name="client_phone" autocomplete="tel" data-beneficiary-required="1" value="'.dol_escape_htmltag($formClientPhone).'"></td></tr>';
@@ -1477,8 +1538,8 @@ print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' h
 print '<tr class="public-company-row public-building-owner-row"'.($formClientType === 'societe' && $formProducerIsBuildingOwner === 'no' ? '' : ' hidden').'><td>'.$langs->trans('BuildingOwnerName').'</td><td><input type="text" class="flat minwidth300" name="building_owner_name" id="building_owner_name" value="'.dol_escape_htmltag($formBuildingOwnerName).'"></td></tr>';
 print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('BuildingAlreadyBuilt').'</td><td><select class="flat minwidth150" name="building_already_built" id="building_already_built" data-company-required="1"><option value="yes"'.($formBuildingAlreadyBuilt === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option><option value="no"'.($formBuildingAlreadyBuilt === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option></select>'.ajax_combobox('building_already_built').'</td></tr>';
 print '<tr class="public-company-row"'.($formClientType === 'societe' ? '' : ' hidden').'><td>'.$langs->trans('ProductionSiteSiret').'</td><td><input type="text" class="flat minwidth200" name="production_site_siret" id="production_site_siret" inputmode="numeric" maxlength="14" pattern="[0-9]{14}" data-company-required="1" value="'.dol_escape_htmltag($formProductionSiteSiret).'"><span class="public-help">'.$langs->trans('ProductionSiteSiretHelp').'</span></td></tr>';
-print '<tr><td>'.$langs->trans('Address').'</td><td><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" data-company-required="1" value="'.dol_escape_htmltag($formSiteAddress).'"></td></tr>';
-print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" data-company-required="1" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
+print '<tr><td>'.$langs->trans('Address').'</td><td><div class="public-address-autocomplete"'.$addressAutocompleteData.' data-address-mode="full" data-zip-target="site_zip" data-town-target="site_town"><input type="text" class="flat minwidth500" name="site_address" autocomplete="street-address" data-company-required="1" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="site-address-suggestions" value="'.dol_escape_htmltag($formSiteAddress).'"><div class="public-address-suggestions" id="site-address-suggestions" role="listbox" aria-label="'.dol_escape_htmltag($langs->trans('AddressAutocompleteSuggestions')).'" hidden></div></div><span class="public-help">'.$langs->trans('AddressAutocompleteHelp').'</span></td></tr>';
+print '<tr><td>'.$langs->trans('Zip').'</td><td><input type="text" class="flat maxwidth100" name="site_zip" autocomplete="postal-code" maxlength="5" inputmode="numeric" pattern="[0-9]{5}" data-company-required="1" value="'.dol_escape_htmltag($formSiteZip).'"></td></tr>';
 print '<tr><td>'.$langs->trans('Town').'</td><td><input type="text" class="flat minwidth300" name="site_town" autocomplete="address-level2" data-company-required="1" value="'.dol_escape_htmltag($formSiteTown).'"></td></tr>';
 print '<tr><td>'.$langs->trans('PRM').'</td><td><input type="text" class="flat minwidth200" name="prm" value="'.dol_escape_htmltag($formPrm).'"></td></tr>';
 print '<tr><td>'.$langs->trans('NetworkType').'</td><td><select class="flat minwidth200" name="type_reseau" id="type_reseau">';
@@ -1680,12 +1741,155 @@ print '<script>
 		});
 	});
 	function setFieldValue(name, value) {
-		if (value === undefined || value === null || value === "") return;
+		if (!name || value === undefined || value === null || value === "") return;
 		var field = document.querySelector("[name=\"" + name + "\"]");
 		if (!field) return;
 		field.value = value;
 		if (window.jQuery) window.jQuery(field).trigger("change");
 	}
+	function initAddressAutocomplete(container) {
+		if (!container || !window.fetch) return;
+		var input = container.querySelector("input[role=\"combobox\"]");
+		var suggestions = container.querySelector("[role=\"listbox\"]");
+		var apiUrl = container.dataset.addressApiUrl || "";
+		var searchTimer = 0;
+		var requestNumber = 0;
+		var activeIndex = -1;
+		var abortController = null;
+		if (!input || !suggestions || !apiUrl) return;
+		function optionButtons() {
+			return Array.prototype.slice.call(suggestions.querySelectorAll("[role=\"option\"]"));
+		}
+		function closeSuggestions() {
+			suggestions.hidden = true;
+			suggestions.innerHTML = "";
+			input.setAttribute("aria-expanded", "false");
+			activeIndex = -1;
+		}
+		function showStatus(message) {
+			suggestions.innerHTML = "";
+			var status = document.createElement("div");
+			status.className = "public-address-suggestion-status";
+			status.setAttribute("aria-live", "polite");
+			status.textContent = message;
+			suggestions.appendChild(status);
+			suggestions.hidden = false;
+			input.setAttribute("aria-expanded", "true");
+			activeIndex = -1;
+		}
+		function setActiveOption(index) {
+			var buttons = optionButtons();
+			if (!buttons.length) return;
+			activeIndex = Math.max(0, Math.min(index, buttons.length - 1));
+			buttons.forEach(function (button, buttonIndex) {
+				button.setAttribute("aria-selected", buttonIndex === activeIndex ? "true" : "false");
+			});
+			buttons[activeIndex].scrollIntoView({block: "nearest"});
+		}
+		function chooseAddress(properties) {
+			var addressValue = container.dataset.addressMode === "split" ? properties.street : properties.name;
+			if (!addressValue) addressValue = properties.name || properties.label || "";
+			input.value = addressValue;
+			input.dispatchEvent(new Event("change", {bubbles: true}));
+			setFieldValue(container.dataset.zipTarget, properties.postcode);
+			setFieldValue(container.dataset.townTarget, properties.city);
+			setFieldValue(container.dataset.inseeTarget, properties.citycode);
+			if (container.dataset.countryId) {
+				setFieldValue(container.dataset.countryTarget, container.dataset.countryId);
+			}
+			closeSuggestions();
+		}
+		function renderSuggestions(features) {
+			var validFeatures = features.filter(function (feature) {
+				var properties = feature && feature.properties ? feature.properties : {};
+				return properties.label && properties.postcode && properties.city && properties.citycode;
+			});
+			if (!validFeatures.length) {
+				showStatus(container.dataset.noResultLabel || "");
+				return;
+			}
+			suggestions.innerHTML = "";
+			validFeatures.forEach(function (feature) {
+				var button = document.createElement("button");
+				button.type = "button";
+				button.className = "public-address-suggestion";
+				button.setAttribute("role", "option");
+				button.setAttribute("aria-selected", "false");
+				button.textContent = feature.properties.label;
+				button.addEventListener("mousedown", function (event) {
+					event.preventDefault();
+				});
+				button.addEventListener("click", function () {
+					chooseAddress(feature.properties);
+				});
+				suggestions.appendChild(button);
+			});
+			suggestions.hidden = false;
+			input.setAttribute("aria-expanded", "true");
+			activeIndex = -1;
+		}
+		function searchAddress() {
+			var query = input.value.trim();
+			if (query.length < 3) {
+				closeSuggestions();
+				return;
+			}
+			var zipField = container.dataset.zipTarget ? document.querySelector("[name=\"" + container.dataset.zipTarget + "\"]") : null;
+			var townField = container.dataset.townTarget ? document.querySelector("[name=\"" + container.dataset.townTarget + "\"]") : null;
+			var contextualQuery = query;
+			if (zipField && zipField.value.trim()) contextualQuery += " " + zipField.value.trim();
+			if (townField && townField.value.trim()) contextualQuery += " " + townField.value.trim();
+			requestNumber++;
+			var currentRequest = requestNumber;
+			if (abortController) abortController.abort();
+			abortController = window.AbortController ? new AbortController() : null;
+			showStatus(container.dataset.loadingLabel || "");
+			var url = apiUrl + "?q=" + encodeURIComponent(contextualQuery) + "&index=address&autocomplete=1&type=housenumber&limit=6";
+			var options = {method: "GET", mode: "cors", credentials: "omit", headers: {Accept: "application/json"}};
+			if (abortController) options.signal = abortController.signal;
+			window.fetch(url, options)
+				.then(function (response) {
+					if (!response.ok) throw new Error("address_lookup_failed");
+					return response.json();
+				})
+				.then(function (payload) {
+					if (currentRequest !== requestNumber) return;
+					renderSuggestions(payload && Array.isArray(payload.features) ? payload.features : []);
+				})
+				.catch(function (error) {
+					if (error && error.name === "AbortError") return;
+					if (currentRequest === requestNumber) showStatus(container.dataset.unavailableLabel || "");
+				});
+		}
+		input.addEventListener("input", function () {
+			window.clearTimeout(searchTimer);
+			if (input.value.trim().length < 3) {
+				closeSuggestions();
+				return;
+			}
+			searchTimer = window.setTimeout(searchAddress, 350);
+		});
+		input.addEventListener("keydown", function (event) {
+			var buttons = optionButtons();
+			if (!buttons.length) return;
+			if (event.key === "ArrowDown") {
+				event.preventDefault();
+				setActiveOption(activeIndex + 1);
+			} else if (event.key === "ArrowUp") {
+				event.preventDefault();
+				setActiveOption(activeIndex <= 0 ? buttons.length - 1 : activeIndex - 1);
+			} else if (event.key === "Enter" && activeIndex >= 0) {
+				event.preventDefault();
+				buttons[activeIndex].click();
+			} else if (event.key === "Escape") {
+				closeSuggestions();
+			}
+		});
+		document.addEventListener("mousedown", function (event) {
+			if (!container.contains(event.target)) closeSuggestions();
+		});
+	}
+	document.querySelectorAll(".public-address-autocomplete").forEach(initAddressAutocomplete);
 	function prefillBeneficiaryFromSiret() {
 		if (!siretInput || siretInput.value.length !== 14 || !siretInput.dataset.lookupUrl) return;
 		window.fetch(siretInput.dataset.lookupUrl + "&siret=" + encodeURIComponent(siretInput.value), {credentials: "same-origin"})

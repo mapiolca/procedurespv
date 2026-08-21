@@ -207,3 +207,13 @@ Résultats attendus : les trois pages utilisent les composants natifs Dolibarr, 
 9. Rejouer le dépôt et le téléchargement du Consuel sur deux entités et depuis un objet partagé.
 
 Résultats attendus : aucun badge spécifique au module n’est utilisé, les éléments facultatifs restent neutres et ne bloquent pas la complétude, le Consuel est stocké dans le répertoire documentaire de l’entité propriétaire, et aucune requête directe ne contourne les prérequis MES.
+
+## Scénario 12 - Autocomplétion des adresses françaises
+
+1. Ouvrir un lien public de collecte utilisable et commencer à saisir une adresse française du bénéficiaire.
+2. Choisir une suggestion et contrôler que le numéro et la voie sont réunis dans le champ Adresse, puis que la commune, le code postal, le code INSEE et le pays France sont préremplis.
+3. Refaire le test avec l’adresse du site de production et contrôler le préremplissage de l’adresse complète, de la commune et du code postal.
+4. Utiliser les flèches du clavier, Entrée et Échap pour naviguer dans les suggestions.
+5. Couper l’accès au service `data.geopf.fr` et vérifier que la saisie manuelle reste possible avec un message non bloquant.
+
+Résultats attendus : les suggestions proviennent du service IGN Géoplateforme, aucune requête n’est lancée avant trois caractères ni à chaque frappe grâce à la temporisation, les champs restent modifiables après sélection et une panne du service externe ne bloque jamais la soumission manuelle.

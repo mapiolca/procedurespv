@@ -118,6 +118,16 @@ class ProceduresPVCompatibility
 				'available' => $nativeDocumentModels,
 				'reason' => $nativeDocumentModels ? '' : 'RequiresNativeDocumentModels',
 			),
+			'french_address_autocomplete' => array(
+				'label' => 'CompatibilityFeatureFrenchAddressAutocomplete',
+				'description' => 'CompatibilityFeatureFrenchAddressAutocompleteDescription',
+				'min_dolibarr' => '20.0.0',
+				'module_available_from' => '20.0.0',
+				'min_php' => '8.0.0',
+				'compatibility_check' => "Browser Fetch API and access to https://data.geopf.fr/geocodage/search",
+				'available' => $dolibarr20 && $php80,
+				'reason' => ($dolibarr20 && $php80) ? '' : 'RequiresDolibarr20Php80',
+			),
 			'powerplantpv_equipment' => array(
 				'label' => 'CompatibilityFeaturePowerPlantPVEquipment',
 				'description' => 'CompatibilityFeaturePowerPlantPVEquipmentDescription',
