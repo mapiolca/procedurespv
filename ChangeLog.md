@@ -48,3 +48,4 @@
 - Correction de l’onglet Contacts/Adresses en supprimant l’appel d’information objet absent du gabarit natif et non chargé sur certaines installations Dolibarr.
 - Harmonisation des badges d’avancement avec les statuts natifs Dolibarr, clôture automatique lorsque toutes les étapes obligatoires sont terminées et réouverture après invalidation.
 - Suppression des booléens Consuel redondants du modèle actif, ajout de l’attestation Consuel comme pièce documentaire obligatoire et verrouillage de la demande de mise en service sur les prérequis réels du dossier.
+- Réordonnancement des onglets Raccordement selon le parcours métier, renommage de l’onglet documentaire en « Fichiers joints » et suppression des onglets Notes et Historique.

@@ -108,7 +108,7 @@ if ($reconcileWorkflow > 0) {
 $form = new Form($db);
 $formfile = new FormFile($db);
 
-$title = $langs->trans('AttachedFiles').' - '.(string) $object->ref;
+$title = $langs->trans('RaccordementAttachedFiles').' - '.(string) $object->ref;
 llxHeader('', $title, '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-document');
 
 $head = procedurespvRaccordementPrepareHead($object);
