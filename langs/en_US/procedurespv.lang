@@ -360,6 +360,7 @@ ValidateCARDi=Validate CARDi
 RefuseCARDi=Refuse CARDi
 SendPublicCardiForm=Send public CARDi form
 CardiPublicFormNotActive=Feature planned but not active.
+CardiNotApplicableForPower=CARD-i is available only when the requested connection power or the withdrawal subscribed power is strictly greater than 36 kVA.
 ToDetermine=To determine
 AddConvention=Add agreement / contract
 EditConvention=Edit agreement / contract

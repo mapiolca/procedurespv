@@ -133,10 +133,12 @@ class RaccordementWorkflow
 		if (!in_array((int) $raccordement->demande_status, array(2, 4), true)) {
 			$missing[] = 'MESRequirementEnedisRequestAdvanced';
 		}
-		if ((int) $raccordement->cardi_required === 2) {
-			$missing[] = 'MESRequirementCardiDetermined';
-		} elseif ((int) $raccordement->cardi_required === 1 && (int) $raccordement->cardi_status !== 6) {
-			$missing[] = 'MESRequirementCardiValidated';
+		if ($raccordement->isCardiApplicable()) {
+			if ((int) $raccordement->cardi_required === 2) {
+				$missing[] = 'MESRequirementCardiDetermined';
+			} elseif ((int) $raccordement->cardi_required === 1 && (int) $raccordement->cardi_status !== 6) {
+				$missing[] = 'MESRequirementCardiValidated';
+			}
 		}
 
 		$conventions = (new Convention($this->db))->fetchAllByRaccordement((int) $raccordement->id);
@@ -206,7 +208,7 @@ class RaccordementWorkflow
 		if (!in_array((int) $raccordement->demande_status, array(2, 4), true)) {
 			return 6;
 		}
-		if ((int) $raccordement->cardi_required === 2 || ((int) $raccordement->cardi_required === 1 && (int) $raccordement->cardi_status !== 6)) {
+		if ($raccordement->isCardiApplicable() && ((int) $raccordement->cardi_required === 2 || ((int) $raccordement->cardi_required === 1 && (int) $raccordement->cardi_status !== 6))) {
 			return 9;
 		}
 		$conventions = (new Convention($this->db))->fetchAllByRaccordement((int) $raccordement->id);
@@ -276,8 +278,9 @@ class RaccordementWorkflow
 
 		$cardiTypes = array(0 => 'status0', 1 => 'status3', 2 => 'status3', 3 => 'status0', 4 => 'status1', 5 => 'status3', 6 => 'status4', 7 => 'status8');
 		$cardiLabels = array(0 => 'CardiStatusNotRequired', 1 => 'CardiStatusToPrepare', 2 => 'CardiStatusToSendClient', 3 => 'CardiStatusWaitingClient', 4 => 'CardiStatusReceived', 5 => 'CardiStatusToControl', 6 => 'CardiStatusValidated', 7 => 'CardiStatusNonCompliant');
-		$cardiRequired = (int) $raccordement->cardi_required === 1;
-		$cardiApplicable = (int) $raccordement->cardi_required !== 0;
+		$cardiPowerApplicable = $raccordement->isCardiApplicable();
+		$cardiRequired = $cardiPowerApplicable && (int) $raccordement->cardi_required === 1;
+		$cardiApplicable = $cardiPowerApplicable && (int) $raccordement->cardi_required !== 0;
 		if ((int) $raccordement->cardi_required === 2) {
 			$cardiLabels[(int) $raccordement->cardi_status] = 'CardiStatusToDetermine';
 			$cardiTypes[(int) $raccordement->cardi_status] = 'status0';

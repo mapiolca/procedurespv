@@ -232,3 +232,13 @@ Résultats attendus : les suggestions proviennent du service IGN Géoplateforme,
 6. Refaire les contrôles documentaires sur un raccordement partagé depuis une autre entité et vérifier que le répertoire de l’entité propriétaire reste utilisé.
 
 Résultats attendus : le bloc et les actions proviennent de `FormFile`, aucun identifiant brut ne remplace un objet résoluble, et les droits ainsi que l’entité propriétaire sont respectés.
+
+## Scénario 14 - Affichage conditionnel de CARD-i
+
+1. Renseigner une puissance de raccordement demandée de `36 kVA` et une puissance souscrite en soutirage de `36 kVA`, puis vérifier que l’onglet CARD-i est absent.
+2. Tester également avec des valeurs inférieures et vérifier que l’accès direct à `cardi.php` est refusé.
+3. Renseigner une puissance de raccordement demandée de `36,01 kVA` et vérifier que l’onglet CARD-i apparaît.
+4. Ramener cette valeur à `36 kVA`, renseigner une puissance souscrite en soutirage de `36,01 kVA` et vérifier que l’onglet reste visible.
+5. Ramener les deux valeurs à `36 kVA` et vérifier que l’onglet disparaît sans que l’ancien état CARD-i ne bloque la mise en service.
+
+Résultats attendus : le seuil est strictement supérieur à `36 kVA`, les deux puissances sont évaluées avec un opérateur logique OU, l’accès direct applique la même règle que les onglets et la puissance installée en kWc ou la puissance injectée en kVA n’influence pas cette visibilité.

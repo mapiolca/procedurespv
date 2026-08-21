@@ -32,7 +32,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Consuel obligatoire fondé sur la date, la référence et une pièce documentaire native, avec verrouillage serveur de la demande de mise en service tant que le dossier n’est pas conforme.
 - Sélection des modèles de courriels depuis les modèles natifs Dolibarr par type d’objet.
 - Sélection native du modèle PDF du mandat ENEDIS dans les modèles de documents Dolibarr.
-- Onglets internes : Collecte client, Demande ENEDIS, CARDi, Convention / contrat, Mise en service, Relances.
+- Onglets internes : Collecte client, Demande ENEDIS, Convention / contrat, Mise en service et Relances ; l’onglet CARD-i apparaît uniquement si la puissance de raccordement demandée ou la puissance souscrite en soutirage est strictement supérieure à 36 kVA.
 - Tables V1 : raccordement, liens publics, signatures, pièces, équipements, conventions, relances.
 - Modèle de numérotation minimal et modèle PDF mandat ENEDIS.
 
@@ -42,7 +42,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 2. Générer le lien public de collecte client depuis l'onglet Collecte.
 3. Le client complète les informations, téléverse les pièces et signe le mandat ENEDIS.
 4. L'équipe contrôle les pièces et le mandat, puis prépare la demande ENEDIS.
-5. Le suivi se poursuit dans les onglets CARDi, Convention / contrat, Mise en service et Relances.
+5. Le suivi se poursuit dans les onglets Convention / contrat, Mise en service et Relances, ainsi que dans CARD-i lorsque le seuil de puissance applicable est dépassé.
 
 ## Limites connues
 

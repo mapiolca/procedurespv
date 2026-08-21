@@ -14,6 +14,9 @@ require_once DOL_DOCUMENT_ROOT.'/core/class/commonobject.class.php';
  */
 class Raccordement extends CommonObject
 {
+	/** CARD-i applicability threshold, in kVA. */
+	public const CARDI_POWER_THRESHOLD_KVA = 36.0;
+
 	/**
 	 * Module key.
 	 *
@@ -212,6 +215,23 @@ class Raccordement extends CommonObject
 	public function getElementType()
 	{
 		return (string) $this->element;
+	}
+
+	/**
+	 * Check whether CARD-i applies to this grid-connection request.
+	 *
+	 * CARD-i applies when either the requested connection power or the
+	 * withdrawal subscribed power is strictly greater than 36 kVA.
+	 *
+	 * @return bool
+	 */
+	public function isCardiApplicable()
+	{
+		$requestedPower = price2num((string) $this->puissance_raccordement_demandee);
+		$withdrawalPower = price2num((string) $this->puissance_souscrite);
+
+		return (is_numeric($requestedPower) && (float) $requestedPower > self::CARDI_POWER_THRESHOLD_KVA)
+			|| (is_numeric($withdrawalPower) && (float) $withdrawalPower > self::CARDI_POWER_THRESHOLD_KVA);
 	}
 
 	/**

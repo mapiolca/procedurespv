@@ -54,6 +54,9 @@ $permissiontowrite = procedurespvCanDo($user, 'raccordement', 'manage_cardi');
 if (!$permissiontoread) {
 	accessforbidden();
 }
+if (!$object->isCardiApplicable()) {
+	accessforbidden($langs->trans('CardiNotApplicableForPower'));
+}
 $workflow = new RaccordementWorkflow($db);
 
 $cardiTransitions = array(

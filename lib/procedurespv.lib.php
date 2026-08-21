@@ -72,13 +72,15 @@ function procedurespvRaccordementPrepareHead($object = null)
 	$tabs = array(
 		'collecte' => array('CollecteClient', '/procedurespv/raccordement/collecte.php'),
 		'demande' => array('DemandeRaccordement', '/procedurespv/raccordement/demande.php'),
-		'cardi' => array('CARDi', '/procedurespv/raccordement/cardi.php'),
-		'convention' => array('ConventionContrat', '/procedurespv/raccordement/convention.php'),
-		'mes' => array('MiseEnService', '/procedurespv/raccordement/mes.php'),
-		'relances' => array('Relances', '/procedurespv/raccordement/relances.php'),
-		'contacts' => array('ContactsAddresses', '/procedurespv/raccordement/contact.php'),
-		'documents' => array('RaccordementAttachedFiles', '/procedurespv/raccordement/document.php'),
 	);
+	if (is_object($object) && $object->isCardiApplicable()) {
+		$tabs['cardi'] = array('CARDi', '/procedurespv/raccordement/cardi.php');
+	}
+	$tabs['convention'] = array('ConventionContrat', '/procedurespv/raccordement/convention.php');
+	$tabs['mes'] = array('MiseEnService', '/procedurespv/raccordement/mes.php');
+	$tabs['relances'] = array('Relances', '/procedurespv/raccordement/relances.php');
+	$tabs['contacts'] = array('ContactsAddresses', '/procedurespv/raccordement/contact.php');
+	$tabs['documents'] = array('RaccordementAttachedFiles', '/procedurespv/raccordement/document.php');
 	if (isModEnabled('agenda')) {
 		$tabs['agenda'] = array('EventsAgenda', '/procedurespv/raccordement/agenda.php');
 	}
