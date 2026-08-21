@@ -8,6 +8,7 @@
  */
 
 require '../../../main.inc.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/convention.class.php', 0);
@@ -51,13 +52,85 @@ function procedurespvConventionReadPayload()
 		'date_signature_client' => procedurespvConventionReadDateTimeFromPost('date_signature_client'),
 		'date_retour_enedis' => procedurespvConventionReadDateTimeFromPost('date_retour_enedis'),
 		'date_validation' => procedurespvConventionReadDateTimeFromPost('date_validation'),
-		'document_recu' => GETPOST('document_recu', 'alphanohtml'),
-		'document_signe' => GETPOST('document_signe', 'alphanohtml'),
+		'document_recu' => '',
+		'document_signe' => '',
 		'commentaire' => GETPOST('commentaire', 'restricthtml'),
 	);
 }
 
-$langs->loadLangs(array('procedurespv@procedurespv'));
+/**
+ * Store convention documents in the native raccordement attached-files directory.
+ *
+ * @param Raccordement $object Parent object
+ * @param Convention $convention Convention being created or updated
+ * @param array<string, string|int|null> $payload Convention payload updated with stored filenames
+ * @return array{result:int,files:list<string>,error:string}
+ */
+function procedurespvConventionStoreUploadedDocuments($object, $convention, array &$payload)
+{
+	$storedFiles = array();
+	$definitions = array(
+		'document_recu_file' => array('payload_key' => 'document_recu', 'code' => 'convention_'.((int) $convention->id).'_received'),
+		'document_signe_file' => array('payload_key' => 'document_signe', 'code' => 'convention_'.((int) $convention->id).'_signed'),
+	);
+
+	foreach ($definitions as $fieldName => $definition) {
+		$upload = procedurespvStoreRaccordementAttachedFile($fieldName, $object, $definition['code']);
+		if ($upload['result'] < 0) {
+			return array('result' => -1, 'files' => $storedFiles, 'error' => $upload['error']);
+		}
+		if ($upload['result'] > 0) {
+			$payload[$definition['payload_key']] = $upload['filename'];
+			$storedFiles[] = $upload['filename'];
+		}
+	}
+
+	return array('result' => 1, 'files' => $storedFiles, 'error' => '');
+}
+
+/**
+ * Remove only files created by the current failed transaction.
+ *
+ * @param Raccordement $object Parent object
+ * @param list<string> $filenames Stored filenames
+ * @return void
+ */
+function procedurespvConventionCleanupStoredFiles($object, array $filenames)
+{
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	if ($uploadDir === '') {
+		return;
+	}
+	foreach ($filenames as $filename) {
+		$safeFilename = dol_sanitizeFileName($filename);
+		if ($safeFilename !== '' && $safeFilename === $filename) {
+			dol_delete_file($uploadDir.'/'.$safeFilename);
+		}
+	}
+}
+
+/**
+ * Render a stored convention document with native preview and download actions.
+ *
+ * @param Raccordement $object Parent object
+ * @param string $filename Stored filename or legacy text value
+ * @return string
+ */
+function procedurespvConventionRenderDocument($object, $filename)
+{
+	if ($filename === '') {
+		return '';
+	}
+	$safeFilename = dol_sanitizeFileName($filename);
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	if ($safeFilename === $filename && $uploadDir !== '' && is_file($uploadDir.'/'.$safeFilename)) {
+		return procedurespvRenderRaccordementDocumentLink($object, $safeFilename);
+	}
+
+	return dol_escape_htmltag($filename);
+}
+
+$langs->loadLangs(array('documents', 'other', 'procedurespv@procedurespv'));
 
 $id = GETPOSTINT('id');
 $lineid = GETPOSTINT('lineid');
@@ -93,14 +166,36 @@ if ($action === 'add_convention') {
 	$convention = new Convention($db);
 	$payload = procedurespvConventionReadPayload();
 	$payload['status'] = Convention::STATUS_NOT_RECEIVED;
+	$storedFiles = array();
+	$uploadError = '';
+	$db->begin();
 	$result = $convention->create($object, $payload);
 	if ($result > 0) {
+		$result = $convention->fetch((int) $result);
+	}
+	if ($result > 0) {
+		$upload = procedurespvConventionStoreUploadedDocuments($object, $convention, $payload);
+		$storedFiles = $upload['files'];
+		$uploadError = $upload['error'];
+		$result = $upload['result'];
+	}
+	if ($result > 0) {
+		$result = $convention->update($payload);
+	}
+	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans('ConventionCreated'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($convention->error, $convention->errors, 'errors');
+	$db->rollback();
+	procedurespvConventionCleanupStoredFiles($object, $storedFiles);
+	if ($uploadError !== '') {
+		setEventMessages($langs->trans($uploadError), null, 'errors');
+	} else {
+		setEventMessages($convention->error, $convention->errors, 'errors');
+	}
 }
 
 if ($action === 'update_convention') {
@@ -112,14 +207,32 @@ if ($action === 'update_convention') {
 
 	$payload = procedurespvConventionReadPayload();
 	$payload['status'] = (int) $convention->status;
-	$result = $convention->update($payload);
+	$payload['document_recu'] = (string) $convention->document_recu;
+	$payload['document_signe'] = (string) $convention->document_signe;
+	$storedFiles = array();
+	$uploadError = '';
+	$db->begin();
+	$upload = procedurespvConventionStoreUploadedDocuments($object, $convention, $payload);
+	$storedFiles = $upload['files'];
+	$uploadError = $upload['error'];
+	$result = $upload['result'];
 	if ($result > 0) {
+		$result = $convention->update($payload);
+	}
+	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($convention->error, $convention->errors, 'errors');
+	$db->rollback();
+	procedurespvConventionCleanupStoredFiles($object, $storedFiles);
+	if ($uploadError !== '') {
+		setEventMessages($langs->trans($uploadError), null, 'errors');
+	} else {
+		setEventMessages($convention->error, $convention->errors, 'errors');
+	}
 }
 
 $statusActions = array(
@@ -188,9 +301,18 @@ if ($permissiontowrite) {
 	$isEdit = ((int) $editedConvention->id > 0);
 	$formAction = $isEdit ? 'update_convention' : 'add_convention';
 	$formTitle = $isEdit ? $langs->trans('EditConvention') : $langs->trans('AddConvention');
+	$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
+	$acceptedFileTypes = array();
+	foreach ($allowedExtensions as $allowedExtension) {
+		if (preg_match('/^[a-z0-9]+$/', $allowedExtension)) {
+			$acceptedFileTypes[] = '.'.$allowedExtension;
+		}
+	}
+	$acceptAttribute = !empty($acceptedFileTypes) ? ' accept="'.dol_escape_htmltag(implode(',', $acceptedFileTypes)).'"' : '';
+	$maximumUploadSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
 
 	print load_fiche_titre($formTitle, '', '');
-	print '<form method="POST" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">';
+	print '<form method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">';
 	print '<input type="hidden" name="token" value="'.newToken().'">';
 	print '<input type="hidden" name="action" value="'.$formAction.'">';
 	if ($isEdit) {
@@ -220,8 +342,20 @@ if ($permissiontowrite) {
 	print '<tr><td>'.$langs->trans('ConventionValidationDate').'</td><td>';
 	$form->selectDate($editedConvention->date_validation ? (int) $editedConvention->date_validation : -1, 'date_validation', 1, 1, 1, '', 1, 1);
 	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionReceivedDocument').'</td><td><input type="text" class="flat minwidth400" name="document_recu" value="'.dol_escape_htmltag((string) $editedConvention->document_recu).'"></td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionSignedDocument').'</td><td><input type="text" class="flat minwidth400" name="document_signe" value="'.dol_escape_htmltag((string) $editedConvention->document_signe).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionReceivedDocument').'</td><td>';
+	print '<input type="file" class="flat minwidth400" name="document_recu_file"'.$acceptAttribute.'>';
+	if ((string) $editedConvention->document_recu !== '') {
+		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_recu).'</div>';
+	}
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionSignedDocument').'</td><td>';
+	print '<input type="file" class="flat minwidth400" name="document_signe_file"'.$acceptAttribute.'>';
+	if ((string) $editedConvention->document_signe !== '') {
+		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_signe).'</div>';
+	}
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
+	print '</td></tr>';
 	print '<tr><td>'.$langs->trans('Comment').'</td><td><textarea class="flat centpercent" name="commentaire" rows="3">'.dol_escape_htmltag((string) $editedConvention->commentaire).'</textarea></td></tr>';
 	print '</table>';
 
@@ -256,10 +390,13 @@ if (!empty($conventions)) {
 		print '<td class="center">'.($convention->date_signature_client ? dol_print_date((int) $convention->date_signature_client, 'dayhour') : '').'</td>';
 		print '<td>';
 		if ($convention->document_recu !== '') {
-			print '<div>'.dol_escape_htmltag((string) $convention->document_recu).'</div>';
+			print '<div>'.$langs->trans('ConventionReceivedDocument').' : '.procedurespvConventionRenderDocument($object, (string) $convention->document_recu).'</div>';
 		}
 		if ($convention->document_signe !== '') {
-			print '<div>'.dol_escape_htmltag((string) $convention->document_signe).'</div>';
+			print '<div>'.$langs->trans('ConventionSignedDocument').' : '.procedurespvConventionRenderDocument($object, (string) $convention->document_signe).'</div>';
+		}
+		if ($convention->document_recu === '' && $convention->document_signe === '') {
+			print '<span class="opacitymedium">'.$langs->trans('NoFileFound').'</span>';
 		}
 		print '</td>';
 		print '<td class="right nowrap">';

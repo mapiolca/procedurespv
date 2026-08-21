@@ -14,6 +14,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Objet métier `Raccordement`.
 - Liste et fiche de raccordement.
 - Lien public de collecte client sécurisé, révocable et expirable.
+- Sauvegarde provisoire de la collecte avant signature, avec reprise du même lien sur mobile sans soumettre le dossier.
 - Dépôt public de pièces avec contrôle taille, extension et MIME.
 - Signature simple du mandat ENEDIS, génération PDF et hash SHA-256.
 - Mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, avec téléchargement public après soumission et tampon entreprise configurable.
@@ -23,6 +24,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Synchronisation transactionnelle du bénéficiaire avec les Tiers et Contacts Dolibarr à partir du SIRET.
 - Sélection structurée des onduleurs et modules depuis le catalogue PowerPlantPV, avec quantités, instantanés de puissance et agrégats serveur.
 - Affichage des fichiers collectés et générés dans le répertoire documentaire et l’onglet natif `Fichiers joints`.
+- Téléversement des documents reçus et signés depuis les conventions, avec aperçu et remontée automatique dans l’onglet `Fichiers joints` et le bloc documentaire de la synthèse.
 - Autocomplétion des adresses françaises du bénéficiaire et du site de production avec le service de géocodage IGN Géoplateforme alimenté par la Base Adresse Nationale ; le navigateur transmet uniquement le texte recherché à `data.geopf.fr` et la saisie manuelle reste disponible en cas d’indisponibilité du service.
 - Bloc natif de fichiers joints directement sur la synthèse du raccordement, avec actions documentaires soumises aux droits Dolibarr.
 - Affichage natif des tiers, projets, centrales photovoltaïques et responsables liés via le `getNomUrl()` de leur objet.

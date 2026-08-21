@@ -199,25 +199,19 @@ function procedurespvRenderRaccordementDocumentLink($object, $filename, $withDow
 }
 
 /**
- * Store an uploaded file in the native raccordement document directory.
+ * Store an attached file in the native raccordement document directory.
  *
  * @param string $fieldName Upload field
  * @param Raccordement $object Parent object
- * @param string $code Document code
- * @param string $label Label
- * @param string $origin Origin
- * @param int $required Required flag
- * @param int $fkPublicLink Revision id
+ * @param string $code Document code used in the stored filename
  * @return array{result:int,filename:string,error:string}
  */
-function procedurespvStoreRaccordementUpload($fieldName, $object, $code, $label, $origin = 'internal', $required = 0, $fkPublicLink = 0)
+function procedurespvStoreRaccordementAttachedFile($fieldName, $object, $code)
 {
-	global $db;
 	if (!isset($_FILES[$fieldName]) || !is_array($_FILES[$fieldName]) || empty($_FILES[$fieldName]['name'])) {
 		return array('result' => 0, 'filename' => '', 'error' => '');
 	}
 	require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
-	require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 	$file = $_FILES[$fieldName];
 	$errorCode = isset($file['error']) ? (int) $file['error'] : UPLOAD_ERR_NO_FILE;
 	$originalName = isset($file['name']) ? (string) $file['name'] : '';
@@ -236,14 +230,50 @@ function procedurespvStoreRaccordementUpload($fieldName, $object, $code, $label,
 	if ($extension === '' || !in_array($extension, $allowedExtensions, true)) {
 		return array('result' => -1, 'filename' => '', 'error' => 'UploadInvalidExtension');
 	}
-	$storedFilename = $code.'_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S').'_'.dol_sanitizeFileName($originalName);
-	$result = dol_move_uploaded_file($tmpName, $uploadDir.'/'.$storedFilename, 1, 0, $errorCode, 0, $fieldName, $uploadDir);
+	$filenamePrefix = dol_sanitizeFileName($code).'_'.dol_print_date(dol_now(), '%Y%m%d%H%M%S');
+	$sanitizedOriginalName = dol_sanitizeFileName($originalName);
+	$storedFilename = $filenamePrefix.'_'.$sanitizedOriginalName;
+	$suffix = 1;
+	while (file_exists($uploadDir.'/'.$storedFilename)) {
+		$storedFilename = $filenamePrefix.'_'.$suffix.'_'.$sanitizedOriginalName;
+		$suffix++;
+	}
+	$result = dol_move_uploaded_file($tmpName, $uploadDir.'/'.$storedFilename, 0, 0, $errorCode, 0, $fieldName, $uploadDir);
 	if (!is_int($result) || $result <= 0) {
 		return array('result' => -1, 'filename' => '', 'error' => is_string($result) && $result !== '' ? $result : 'UploadMoveFailed');
 	}
 	if ($result === 2) {
 		$storedFilename .= '.noexe';
 	}
+
+	return array('result' => 1, 'filename' => $storedFilename, 'error' => '');
+}
+
+/**
+ * Store an uploaded piece and index it in the collection piece table.
+ *
+ * @param string $fieldName Upload field
+ * @param Raccordement $object Parent object
+ * @param string $code Document code
+ * @param string $label Label
+ * @param string $origin Origin
+ * @param int $required Required flag
+ * @param int $fkPublicLink Revision id
+ * @return array{result:int,filename:string,error:string}
+ */
+function procedurespvStoreRaccordementUpload($fieldName, $object, $code, $label, $origin = 'internal', $required = 0, $fkPublicLink = 0)
+{
+	global $db;
+
+	$storedFile = procedurespvStoreRaccordementAttachedFile($fieldName, $object, $code);
+	if ($storedFile['result'] <= 0) {
+		return $storedFile;
+	}
+
+	require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
+	require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
+	$uploadDir = procedurespvGetRaccordementUploadDir($object);
+	$storedFilename = $storedFile['filename'];
 	$piece = new Piece($db);
 	$pieceId = $piece->createOrUpdateUploaded($object, $code, $label, $origin, $uploadDir, $storedFilename, $required, $fkPublicLink);
 	if ($pieceId <= 0) {

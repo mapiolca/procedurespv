@@ -241,4 +241,29 @@ Résultats attendus : le bloc et les actions proviennent de `FormFile`, aucun id
 4. Ramener cette valeur à `36 kVA`, renseigner une puissance souscrite en soutirage de `36,01 kVA` et vérifier que l’onglet reste visible.
 5. Ramener les deux valeurs à `36 kVA` et vérifier que l’onglet disparaît sans que l’ancien état CARD-i ne bloque la mise en service.
 
-Résultats attendus : le seuil est strictement supérieur à `36 kVA`, les deux puissances sont évaluées avec un opérateur logique OU, l’accès direct applique la même règle que les onglets et la puissance installée en kWc ou la puissance injectée en kVA n’influence pas cette visibilité.
+Résultats attendus : le seuil est strictement supérieur à `36 kVA`, les deux puissances sont évaluées avec un opérateur logique OU, l’accès direct applique la même règle que les onglets et la puissance installée en kWc ou la puissance du raccordement en kVA n’influence pas cette visibilité.
+
+## Scénario 15 - Reprise de la signature sur mobile
+
+1. Ouvrir un lien public actif sur un ordinateur, renseigner partiellement la collecte et sélectionner une ou plusieurs pièces.
+2. Cliquer sur `Enregistrer et signer sur mon mobile` sans compléter les champs obligatoires et sans dessiner de signature.
+3. Vérifier que la page confirme l’enregistrement, que la collecte reste non soumise et que le bouton de soumission finale demeure disponible.
+4. Rouvrir exactement le même lien sur un mobile et contrôler le préremplissage des champs, des informations du signataire et de l’acceptation du mandat.
+5. Vérifier que les pièces téléversées lors de la sauvegarde restent rattachées à la révision courante.
+6. Signer puis soumettre depuis le mobile et vérifier le workflow habituel.
+7. Refaire le scénario en continuant directement sur l’ordinateur après la sauvegarde, sans changer d’appareil.
+
+Résultats attendus : la sauvegarde provisoire n’appelle ni `markSubmitted()`, ni la génération du mandat PDF, ni la synchronisation métier du raccordement ; le lien reste actif et les deux parcours de signature restent possibles.
+
+## Scénario 16 - Documents reçus et signés d’une convention
+
+1. Ouvrir l’onglet `Convention / contrat` d’un raccordement et ajouter une convention.
+2. Sélectionner un fichier dans `Document reçu` et un autre dans `Document signé`, puis enregistrer.
+3. Vérifier que les deux documents sont proposés en aperçu et en téléchargement dans la liste des conventions.
+4. Ouvrir l’onglet `Fichiers joints` et vérifier que les deux fichiers apparaissent dans la liste native.
+5. Revenir sur la synthèse et vérifier que les mêmes fichiers apparaissent dans le bloc natif `Fichiers joints`.
+6. Modifier la convention, téléverser une nouvelle version d’un document et vérifier que la convention pointe vers la nouvelle version sans supprimer automatiquement l’ancienne pièce jointe.
+7. Refaire le test sur un raccordement partagé depuis une autre entité et contrôler que les fichiers restent dans le répertoire documentaire de l’entité propriétaire.
+8. Tester un fichier trop volumineux et une extension interdite, puis vérifier que la convention n’est pas enregistrée et qu’aucun fichier partiel ne subsiste.
+
+Résultats attendus : les champs sont de vrais téléversements protégés par droit et token CSRF, les noms enregistrés correspondent aux fichiers du répertoire documentaire natif du raccordement, la synthèse et l’onglet `Fichiers joints` les affichent sans duplication de stockage, et un échec annule les écritures métier ainsi que les nouveaux fichiers de la tentative.

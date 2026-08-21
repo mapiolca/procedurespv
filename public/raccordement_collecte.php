@@ -476,7 +476,11 @@ function procedurespvPublicStoreUploadedPiece($langs, $object, $publicLink, arra
 
 $publicToken = GETPOST('public_token', 'alphanohtml');
 $action = GETPOST('action', 'aZ09');
+if ($action === 'submit_collecte' && GETPOSTINT('save_for_mobile') === 1) {
+	$action = 'save_for_mobile';
+}
 $submissionDone = false;
+$mobileSaveNotice = GETPOSTINT('saved_for_mobile') === 1;
 
 if (!isModEnabled('procedurespv')) {
 	$publicToken = '';
@@ -543,69 +547,74 @@ if ($action === 'download_mandat') {
 	exit;
 }
 
-$isSubmitCollecte = $action === 'submit_collecte';
+// Both form actions must preserve the posted values when the page is redisplayed.
+$isCollecteFormPost = in_array($action, array('save_for_mobile', 'submit_collecte'), true);
 $beneficiaryStatuses = procedurespvPublicGetBeneficiaryStatuses();
-$formClientType = $isSubmitCollecte ? GETPOST('client_type', 'alphanohtml') : 'particulier';
+$formClientType = $isCollecteFormPost ? GETPOST('client_type', 'alphanohtml') : 'particulier';
 $formClientType = $formClientType === 'association' ? 'administration' : $formClientType;
 if (!isset($beneficiaryStatuses[$formClientType])) {
 	$formClientType = 'particulier';
 }
-$formClientName = $isSubmitCollecte ? GETPOST('client_name', 'restricthtml') : '';
-$formClientSiret = $isSubmitCollecte ? GETPOST('client_siret', 'alphanohtml') : '';
-$formClientEmail = $isSubmitCollecte ? GETPOST('client_email', 'restricthtml') : (string) $publicLink->email_destinataire;
-$formClientPhone = $isSubmitCollecte ? GETPOST('client_phone', 'alphanohtml') : '';
-$formCompanyWithoutSiret = $isSubmitCollecte ? GETPOSTINT('company_without_siret') : 0;
-$formCompanyInseeCode = $isSubmitCollecte ? GETPOST('company_insee_code', 'alphanohtml') : '';
-$formCompanyCapital = $isSubmitCollecte ? GETPOST('company_capital', 'alphanohtml') : '';
-$formCompanyLegalForm = $isSubmitCollecte ? GETPOSTINT('company_legal_form') : 0;
-$formPublicEngagementCode = $isSubmitCollecte ? GETPOST('public_engagement_code', 'alphanohtml') : '';
-$formPublicServiceCode = $isSubmitCollecte ? GETPOST('public_service_code', 'alphanohtml') : '';
-$formRepresentativeFunction = $isSubmitCollecte ? GETPOST('representative_function', 'restricthtml') : '';
-$formBeneficiaryCivility = $isSubmitCollecte ? GETPOST('beneficiary_civility', 'alphanohtml') : '';
-$formRepresentativeLastname = $isSubmitCollecte ? GETPOST('representative_lastname', 'restricthtml') : '';
-$formRepresentativeFirstname = $isSubmitCollecte ? GETPOST('representative_firstname', 'restricthtml') : '';
-$formRepresentativeMobile = $isSubmitCollecte ? GETPOST('representative_mobile', 'alphanohtml') : '';
+$formClientName = $isCollecteFormPost ? GETPOST('client_name', 'restricthtml') : '';
+$formClientSiret = $isCollecteFormPost ? GETPOST('client_siret', 'alphanohtml') : '';
+$formClientEmail = $isCollecteFormPost ? GETPOST('client_email', 'restricthtml') : (string) $publicLink->email_destinataire;
+$formClientPhone = $isCollecteFormPost ? GETPOST('client_phone', 'alphanohtml') : '';
+$formCompanyWithoutSiret = $isCollecteFormPost ? GETPOSTINT('company_without_siret') : 0;
+$formCompanyInseeCode = $isCollecteFormPost ? GETPOST('company_insee_code', 'alphanohtml') : '';
+$formCompanyCapital = $isCollecteFormPost ? GETPOST('company_capital', 'alphanohtml') : '';
+$formCompanyLegalForm = $isCollecteFormPost ? GETPOSTINT('company_legal_form') : 0;
+$formPublicEngagementCode = $isCollecteFormPost ? GETPOST('public_engagement_code', 'alphanohtml') : '';
+$formPublicServiceCode = $isCollecteFormPost ? GETPOST('public_service_code', 'alphanohtml') : '';
+$formRepresentativeFunction = $isCollecteFormPost ? GETPOST('representative_function', 'restricthtml') : '';
+$formBeneficiaryCivility = $isCollecteFormPost ? GETPOST('beneficiary_civility', 'alphanohtml') : '';
+$formRepresentativeLastname = $isCollecteFormPost ? GETPOST('representative_lastname', 'restricthtml') : '';
+$formRepresentativeFirstname = $isCollecteFormPost ? GETPOST('representative_firstname', 'restricthtml') : '';
+$formRepresentativeMobile = $isCollecteFormPost ? GETPOST('representative_mobile', 'alphanohtml') : '';
 $legacyBeneficiaryStreetNumber = '';
-$formHeadquartersAddress = $isSubmitCollecte ? GETPOST('headquarters_address', 'restricthtml') : '';
-$formBeneficiaryAddressComplement = $isSubmitCollecte ? GETPOST('beneficiary_address_complement', 'restricthtml') : '';
-$formHeadquartersZip = $isSubmitCollecte ? GETPOST('headquarters_zip', 'alphanohtml') : '';
-$formHeadquartersTown = $isSubmitCollecte ? GETPOST('headquarters_town', 'restricthtml') : '';
-$formBeneficiaryTownInseeCode = $isSubmitCollecte ? GETPOST('beneficiary_town_insee_code', 'alphanohtml') : '';
-$formBeneficiaryCountryId = $isSubmitCollecte ? GETPOSTINT('beneficiary_country_id') : (!empty($mysoc->country_id) ? (int) $mysoc->country_id : 0);
-$formBeneficiaryCedex = $isSubmitCollecte ? GETPOST('beneficiary_cedex', 'restricthtml') : '';
-$formProducerIsBuildingOwner = $isSubmitCollecte ? GETPOST('producer_is_building_owner', 'alphanohtml') : 'yes';
-$formBuildingOwnerName = $isSubmitCollecte ? GETPOST('building_owner_name', 'restricthtml') : '';
-$formBuildingAlreadyBuilt = $isSubmitCollecte ? GETPOST('building_already_built', 'alphanohtml') : 'yes';
-$formSiteName = $isSubmitCollecte ? GETPOST('site_name', 'restricthtml') : (string) $object->site_name_snapshot;
-$formProductionSiteSiret = $isSubmitCollecte ? GETPOST('production_site_siret', 'alphanohtml') : '';
-$formSiteAddress = $isSubmitCollecte ? GETPOST('site_address', 'restricthtml') : (string) $object->site_address_snapshot;
-$formSiteZip = $isSubmitCollecte ? GETPOST('site_zip', 'alphanohtml') : (string) $object->site_zip_snapshot;
-$formSiteTown = $isSubmitCollecte ? GETPOST('site_town', 'restricthtml') : (string) $object->site_town_snapshot;
-$formPrm = $isSubmitCollecte ? GETPOST('prm', 'alphanohtml') : (string) $object->prm;
-$formTypeReseau = $isSubmitCollecte ? GETPOST('type_reseau', 'alphanohtml') : (string) $object->type_reseau;
-$formSiteAlreadyConnected = $isSubmitCollecte ? GETPOST('site_already_connected', 'alphanohtml') : 'yes';
-$formExistingConnectionType = $isSubmitCollecte ? GETPOST('existing_connection_type', 'alphanohtml') : 'bt_soutirage';
-$formPdlChoice = $isSubmitCollecte ? GETPOST('pdl_choice', 'alphanohtml') : 'new_pdl';
-$formPuissanceSouscrite = $isSubmitCollecte ? GETPOST('puissance_souscrite', 'alphanohtml') : (string) $object->puissance_souscrite;
-$formPdlContractHolder = $isSubmitCollecte ? GETPOST('pdl_contract_holder', 'restricthtml') : '';
-$formTypeExploitation = $isSubmitCollecte ? GETPOST('type_exploitation', 'alphanohtml') : (string) $object->type_exploitation;
-$formPuissanceInstallee = $isSubmitCollecte ? GETPOST('puissance_installee_kwc', 'alphanohtml') : (string) $object->puissance_installee_kwc;
-$formPuissanceInjection = $isSubmitCollecte ? GETPOST('puissance_injection_kva', 'alphanohtml') : (string) $object->puissance_injection_kva;
-$formNoRelatedProjectAttestation = $isSubmitCollecte ? GETPOST('no_related_project_attestation', 'alphanohtml') : 'yes';
-$formRelatedProjectReferences = $isSubmitCollecte ? GETPOST('related_project_references', 'restricthtml') : '';
-$formEnedisRequestType = $isSubmitCollecte ? GETPOST('enedis_request_type', 'alphanohtml') : 'enedis_full';
-$formSignataireNom = $isSubmitCollecte ? GETPOST('signataire_nom', 'restricthtml') : '';
-$formSignataireFonction = $isSubmitCollecte ? GETPOST('signataire_fonction', 'restricthtml') : '';
-$formSignataireEmail = $isSubmitCollecte ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
-$formMandatAcceptance = $isSubmitCollecte ? GETPOST('mandat_acceptance', 'alphanohtml') : 'no';
+$formHeadquartersAddress = $isCollecteFormPost ? GETPOST('headquarters_address', 'restricthtml') : '';
+$formBeneficiaryAddressComplement = $isCollecteFormPost ? GETPOST('beneficiary_address_complement', 'restricthtml') : '';
+$formHeadquartersZip = $isCollecteFormPost ? GETPOST('headquarters_zip', 'alphanohtml') : '';
+$formHeadquartersTown = $isCollecteFormPost ? GETPOST('headquarters_town', 'restricthtml') : '';
+$formBeneficiaryTownInseeCode = $isCollecteFormPost ? GETPOST('beneficiary_town_insee_code', 'alphanohtml') : '';
+$formBeneficiaryCountryId = $isCollecteFormPost ? GETPOSTINT('beneficiary_country_id') : (!empty($mysoc->country_id) ? (int) $mysoc->country_id : 0);
+$formBeneficiaryCedex = $isCollecteFormPost ? GETPOST('beneficiary_cedex', 'restricthtml') : '';
+$formProducerIsBuildingOwner = $isCollecteFormPost ? GETPOST('producer_is_building_owner', 'alphanohtml') : 'yes';
+$formBuildingOwnerName = $isCollecteFormPost ? GETPOST('building_owner_name', 'restricthtml') : '';
+$formBuildingAlreadyBuilt = $isCollecteFormPost ? GETPOST('building_already_built', 'alphanohtml') : 'yes';
+$formSiteName = $isCollecteFormPost ? GETPOST('site_name', 'restricthtml') : (string) $object->site_name_snapshot;
+$formProductionSiteSiret = $isCollecteFormPost ? GETPOST('production_site_siret', 'alphanohtml') : '';
+$formSiteAddress = $isCollecteFormPost ? GETPOST('site_address', 'restricthtml') : (string) $object->site_address_snapshot;
+$formSiteZip = $isCollecteFormPost ? GETPOST('site_zip', 'alphanohtml') : (string) $object->site_zip_snapshot;
+$formSiteTown = $isCollecteFormPost ? GETPOST('site_town', 'restricthtml') : (string) $object->site_town_snapshot;
+$formPrm = $isCollecteFormPost ? GETPOST('prm', 'alphanohtml') : (string) $object->prm;
+$formTypeReseau = $isCollecteFormPost ? GETPOST('type_reseau', 'alphanohtml') : (string) $object->type_reseau;
+$formSiteAlreadyConnected = $isCollecteFormPost ? GETPOST('site_already_connected', 'alphanohtml') : 'yes';
+$formExistingConnectionType = $isCollecteFormPost ? GETPOST('existing_connection_type', 'alphanohtml') : 'bt_soutirage';
+$formPdlChoice = $isCollecteFormPost ? GETPOST('pdl_choice', 'alphanohtml') : 'new_pdl';
+$formPuissanceSouscrite = $isCollecteFormPost ? GETPOST('puissance_souscrite', 'alphanohtml') : (string) $object->puissance_souscrite;
+$formPdlContractHolder = $isCollecteFormPost ? GETPOST('pdl_contract_holder', 'restricthtml') : '';
+$formTypeExploitation = $isCollecteFormPost ? GETPOST('type_exploitation', 'alphanohtml') : (string) $object->type_exploitation;
+$formPuissanceInstallee = $isCollecteFormPost ? GETPOST('puissance_installee_kwc', 'alphanohtml') : (string) $object->puissance_installee_kwc;
+$formPuissanceInjection = $isCollecteFormPost ? GETPOST('puissance_injection_kva', 'alphanohtml') : (string) $object->puissance_injection_kva;
+$formNoRelatedProjectAttestation = $isCollecteFormPost ? GETPOST('no_related_project_attestation', 'alphanohtml') : 'yes';
+$formRelatedProjectReferences = $isCollecteFormPost ? GETPOST('related_project_references', 'restricthtml') : '';
+$formEnedisRequestType = $isCollecteFormPost ? GETPOST('enedis_request_type', 'alphanohtml') : 'enedis_full';
+$formSignataireNom = $isCollecteFormPost ? GETPOST('signataire_nom', 'restricthtml') : '';
+$formSignataireFonction = $isCollecteFormPost ? GETPOST('signataire_fonction', 'restricthtml') : '';
+$formSignataireEmail = $isCollecteFormPost ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
+$formMandatAcceptance = $isCollecteFormPost ? GETPOST('mandat_acceptance', 'alphanohtml') : 'no';
+
+$currentPayloadIsMobileDraft = false;
 
 // A fresh public link is a new revision prefilled from the last submitted revision.
-if (!$isSubmitCollecte) {
+if (!$isCollecteFormPost) {
 	$prefillPayload = $publicLink->getPayloadArray();
+	$currentPayloadIsMobileDraft = !empty($prefillPayload['draft_saved_for_mobile']);
 	if (empty($prefillPayload) && $linkObjectLoaded) {
 		$previousLink = new PublicLink($db);
 		if ($previousLink->fetchLatestSubmittedForRaccordement((int) $object->id, (int) $publicLink->id) > 0) {
 			$prefillPayload = $previousLink->getPayloadArray();
+			$currentPayloadIsMobileDraft = false;
 		}
 	}
 	if (!empty($prefillPayload)) {
@@ -616,6 +625,7 @@ if (!$isSubmitCollecte) {
 		$sitePayload = isset($prefillPayload['site']) && is_array($prefillPayload['site']) ? $prefillPayload['site'] : array();
 		$productionSitePayload = isset($prefillPayload['production_site']) && is_array($prefillPayload['production_site']) ? $prefillPayload['production_site'] : array();
 		$productionPayload = isset($prefillPayload['production']) && is_array($prefillPayload['production']) ? $prefillPayload['production'] : array();
+		$mandatePayload = isset($prefillPayload['mandate']) && is_array($prefillPayload['mandate']) ? $prefillPayload['mandate'] : array();
 		$formClientType = (string) ($prefillPayload['beneficiary_status'] ?? $prefillPayload['client_type'] ?? $formClientType);
 		$formClientName = (string) ($prefillPayload['client_name'] ?? $formClientName);
 		$formClientSiret = (string) ($prefillPayload['client_siret'] ?? $formClientSiret);
@@ -661,11 +671,15 @@ if (!$isSubmitCollecte) {
 		$formNoRelatedProjectAttestation = (string) ($productionPayload['no_related_project_attestation'] ?? $formNoRelatedProjectAttestation);
 		$formRelatedProjectReferences = (string) ($productionPayload['related_project_references'] ?? '');
 		$formEnedisRequestType = (string) ($productionPayload['enedis_request_type'] ?? $formEnedisRequestType);
+		$formSignataireNom = (string) ($mandatePayload['signer_name'] ?? $formSignataireNom);
+		$formSignataireFonction = (string) ($mandatePayload['signer_function'] ?? $formSignataireFonction);
+		$formSignataireEmail = (string) ($mandatePayload['signer_email'] ?? $formSignataireEmail);
+		$formMandatAcceptance = (string) ($mandatePayload['acceptance'] ?? $formMandatAcceptance);
 	}
 }
 
 // A Centrale selected as site source remains authoritative over an older collection revision.
-if (!$isSubmitCollecte && !empty($centraleSourceSiteData)) {
+if (!$isCollecteFormPost && !$currentPayloadIsMobileDraft && !empty($centraleSourceSiteData)) {
 	$formSiteName = isset($centraleSourceSiteData['site_name']) ? (string) $centraleSourceSiteData['site_name'] : $formSiteName;
 	$formSiteAddress = isset($centraleSourceSiteData['address']) ? (string) $centraleSourceSiteData['address'] : $formSiteAddress;
 	$formSiteZip = isset($centraleSourceSiteData['zip']) ? (string) $centraleSourceSiteData['zip'] : $formSiteZip;
@@ -682,7 +696,7 @@ if ($legacyBeneficiaryStreetNumber !== '') {
 	}
 }
 
-if ($linkUsable && $action !== 'submit_collecte') {
+if ($linkUsable && !$isCollecteFormPost) {
 	$ip = function_exists('getUserRemoteIP') ? getUserRemoteIP() : (isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '');
 	$userAgent = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
 	$publicLink->logAccess($ip, $userAgent);
@@ -700,10 +714,11 @@ if ($linkUsable && $action !== 'submit_collecte') {
 	}
 }
 
-if ($linkUsable && $action === 'submit_collecte') {
+if ($linkUsable && in_array($action, array('save_for_mobile', 'submit_collecte'), true)) {
 	if (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken())) {
 		accessforbidden($langs->trans('ErrorBadToken'));
 	}
+	$isSaveForMobile = $action === 'save_for_mobile';
 
 	$clientType = $formClientType;
 	$clientName = $formClientName;
@@ -758,6 +773,14 @@ if ($linkUsable && $action === 'submit_collecte') {
 	$signatureDataUrl = GETPOST('signature_data_url', 'restricthtml');
 	$uploadErrors = array();
 	$uploadedPieceIds = array();
+	$existingPayload = $publicLink->getPayloadArray();
+	if (isset($existingPayload['uploaded_piece_ids']) && is_array($existingPayload['uploaded_piece_ids'])) {
+		foreach ($existingPayload['uploaded_piece_ids'] as $pieceCode => $pieceId) {
+			if (is_string($pieceCode) && (int) $pieceId > 0) {
+				$uploadedPieceIds[$pieceCode] = (int) $pieceId;
+			}
+		}
+	}
 	$signatureId = 0;
 
 	if ($clientType === 'particulier') {
@@ -846,11 +869,48 @@ if ($linkUsable && $action === 'submit_collecte') {
 			'related_project_references' => $relatedProjectReferences,
 			'enedis_request_type' => $enedisRequestType,
 		),
+		'mandate' => array(
+			'signer_name' => $signataireNom,
+			'signer_function' => $signataireFonction,
+			'signer_email' => $signataireEmail,
+			'acceptance' => $mandatAcceptance,
+		),
 		'uploaded_piece_ids' => $uploadedPieceIds,
 	);
+	if ($isSaveForMobile) {
+		$publicSummary['draft_saved_for_mobile'] = dol_now();
+	}
 
 	$collectionService = new CollectionService($db);
+	if ($isSaveForMobile) {
+		if ($collectionService->prelistRevision($object, $publicLink, $publicSummary, $langs, false) < 0) {
+			$uploadErrors[] = $collectionService->error;
+		}
+		if (empty($uploadErrors)) {
+			foreach (procedurespvPublicGetPieceDefinitions($clientType, $pdlChoice, $siteAlreadyConnected) as $pieceDefinition) {
+				$uploadedPieceId = procedurespvPublicStoreUploadedPiece($langs, $object, $publicLink, $pieceDefinition, $uploadErrors);
+				if ($uploadedPieceId > 0) {
+					$uploadedPieceIds[$pieceDefinition['code']] = $uploadedPieceId;
+				}
+			}
+			$publicSummary['uploaded_piece_ids'] = $uploadedPieceIds;
+		}
+		$result = empty($uploadErrors) ? $publicLink->savePayload($publicSummary) : -1;
+		if ($result > 0) {
+			$redirectUrl = dol_buildpath('/procedurespv/public/raccordement_collecte.php', 1).'?public_token='.urlencode($publicToken).'&saved_for_mobile=1#public-section-mandat';
+			header('Location: '.$redirectUrl);
+			$db->close();
+			exit;
+		}
+		if (!empty($uploadErrors)) {
+			setEventMessages('', $uploadErrors, 'errors');
+		} else {
+			setEventMessages($langs->trans($publicLink->error !== '' ? $publicLink->error : 'Error'), null, 'errors');
+		}
+	}
+}
 
+if ($linkUsable && $action === 'submit_collecte') {
 	$object->site_name_snapshot = $siteName;
 	$object->site_address_snapshot = $siteAddress;
 	$object->site_zip_snapshot = $siteZip;
@@ -1368,12 +1428,16 @@ body.page-public-collecte div.fiche {
 	position: sticky;
 	bottom: 0;
 	z-index: 2;
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 12px;
 	margin-top: 18px;
 	padding: 14px 0 0;
-	text-align: right;
 	background: linear-gradient(180deg, rgba(238, 246, 242, 0), #eef6f2 38%);
 }
-.public-actions .button-save {
+.public-actions .button-save,
+.public-actions .button-save-mobile {
 	min-width: 220px;
 	padding: 10px 18px;
 	font-weight: 800;
@@ -1452,9 +1516,10 @@ body.page-public-collecte div.fiche {
 		flex: 0 0 auto;
 	}
 	.public-actions {
-		text-align: center;
+		flex-direction: column;
 	}
-	.public-actions .button-save {
+	.public-actions .button-save,
+	.public-actions .button-save-mobile {
 		width: 100%;
 	}
 	.public-legal-footer {
@@ -1504,6 +1569,10 @@ if (!$linkUsable) {
 	llxFooter('', 'public');
 	$db->close();
 	exit;
+}
+
+if ($mobileSaveNotice && $currentPayloadIsMobileDraft) {
+	print '<div class="ok public-mobile-save-notice">'.$langs->trans('PublicCollecteSavedForMobile').'</div>';
 }
 
 print '<ul class="public-steps" aria-label="'.$langs->trans('PublicCollecteTitle').'">';
@@ -2051,7 +2120,10 @@ print '<script>
 }());
 </script>';
 
-print '<div class="public-actions"><input type="submit" class="button button-save" value="'.$langs->trans('SubmitCollecte').'"></div>';
+print '<div class="public-actions">';
+print '<button type="submit" name="save_for_mobile" value="1" class="button button-save-mobile" formnovalidate>'.$langs->trans('SaveAndSignOnMobile').'</button>';
+print '<button type="submit" class="button button-save">'.$langs->trans('SubmitCollecte').'</button>';
+print '</div>';
 print '</form>';
 procedurespvPublicPrintLegalFooter($langs, $companyLegalData);
 print '</div>';

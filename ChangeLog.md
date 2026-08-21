@@ -55,3 +55,5 @@
 - Harmonisation du tableau des pièces de collecte : origine avec initiale majuscule et message natif `NoFileFound` lorsqu’aucun document n’est téléversé.
 - Affichage conditionnel de l’onglet CARD-i uniquement lorsque la puissance de raccordement demandée ou la puissance souscrite en soutirage est strictement supérieure à 36 kVA, avec protection identique de l’accès direct et du workflow.
 - Extension de la synchronisation Centrale PV aux puissances installée et de raccordement, et remplacement du libellé « Puissance injectée » par « Puissance du raccordement ».
+- Ajout d’une sauvegarde provisoire « Enregistrer et signer sur mon mobile » conservant les données et pièces de la collecte sans la soumettre, avec reprise du même lien pour signer sur mobile ou sur l’appareil courant.
+- Remplacement des champs texte « Document reçu » et « Document signé » des conventions par des téléversements stockés dans les fichiers joints natifs du raccordement, avec aperçu et téléchargement depuis la convention.
