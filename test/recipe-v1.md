@@ -217,3 +217,14 @@ Résultats attendus : aucun badge spécifique au module n’est utilisé, les é
 5. Couper l’accès au service `data.geopf.fr` et vérifier que la saisie manuelle reste possible avec un message non bloquant.
 
 Résultats attendus : les suggestions proviennent du service IGN Géoplateforme, aucune requête n’est lancée avant trois caractères ni à chaque frappe grâce à la temporisation, les champs restent modifiables après sélection et une panne du service externe ne bloque jamais la soumission manuelle.
+
+## Scénario 13 - Bloc natif des fichiers joints et objets liés
+
+1. Ouvrir la synthèse d’un raccordement sans fichier puis avec plusieurs fichiers et vérifier que le bloc natif `Fichiers joints` reste visible dans les deux cas.
+2. Avec le droit d’écriture, ajouter un fichier avec le formulaire natif puis tester l’aperçu, le téléchargement, le renommage et la suppression.
+3. Avec le seul droit de lecture, vérifier que l’aperçu et le téléchargement restent accessibles, sans action d’ajout, de renommage ni de suppression.
+4. Vérifier que le tiers, le projet, la centrale photovoltaïque et le responsable sont affichés avec leur pictogramme, leur libellé ou référence et leur infobulle `getNomUrl()`.
+5. Retirer le droit de lecture de chaque objet lié et contrôler que son rendu natif n’est plus cliquable.
+6. Refaire les contrôles documentaires sur un raccordement partagé depuis une autre entité et vérifier que le répertoire de l’entité propriétaire reste utilisé.
+
+Résultats attendus : le bloc et les actions proviennent de `FormFile`, aucun identifiant brut ne remplace un objet résoluble, et les droits ainsi que l’entité propriétaire sont respectés.

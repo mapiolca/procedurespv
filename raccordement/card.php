@@ -8,11 +8,15 @@
  */
 
 require '../../../main.inc.php';
+require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.form.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formprojet.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formfile.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/html.formactions.class.php';
 require_once DOL_DOCUMENT_ROOT.'/core/class/doleditor.class.php';
+require_once DOL_DOCUMENT_ROOT.'/societe/class/societe.class.php';
+require_once DOL_DOCUMENT_ROOT.'/projet/class/project.class.php';
+require_once DOL_DOCUMENT_ROOT.'/user/class/user.class.php';
 require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/relance.class.php', 0);
@@ -22,12 +26,13 @@ require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php'
 require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
-$langs->loadLangs(array('companies', 'projects', 'users', 'procedurespv@procedurespv'));
+$langs->loadLangs(array('companies', 'documents', 'projects', 'users', 'procedurespv@procedurespv'));
 
 $id = GETPOSTINT('id');
 $action = GETPOST('action', 'aZ09');
 $tab = GETPOST('tab', 'aZ09');
 $cancel = GETPOST('cancel', 'alpha');
+$confirm = GETPOST('confirm', 'alpha');
 $backtopage = GETPOST('backtopage', 'alpha');
 
 if (!isModEnabled('procedurespv')) {
@@ -56,6 +61,9 @@ if ($id > 0) {
 	if ($result <= 0) {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
+	if (!empty($user->socid) && (int) $object->fk_soc !== (int) $user->socid) {
+		accessforbidden();
+	}
 	$legacyIndependentTabs = array(
 		'contacts' => 'contact.php',
 		'documents' => 'document.php',
@@ -83,8 +91,11 @@ $statusActions = array(
 	'cancel' => array('permission' => 'write', 'from' => range(0, 15), 'status' => -1, 'message' => 'RaccordementCanceled'),
 );
 $sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_snapshot'), array_keys($statusActions));
+$hasFileMutation = GETPOST('sendit', 'alpha') !== ''
+	|| GETPOST('linkit', 'restricthtml') !== ''
+	|| in_array($action, array('deletefile', 'confirm_deletefile', 'deletelink', 'confirm_updateline', 'renamefile'), true);
 
-if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
+if ((in_array($action, $sensitiveActions, true) || $hasFileMutation) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
@@ -536,6 +547,15 @@ if ($action === 'freeze_snapshot' && $object->id > 0) {
 	setEventMessages($object->error, $object->errors, 'errors');
 }
 
+$modulepart = 'procedurespv';
+$upload_dir = '';
+if ((int) $object->id > 0) {
+	$upload_dir = procedurespvGetRaccordementUploadDir($object);
+	if ($upload_dir !== '') {
+		include DOL_DOCUMENT_ROOT.'/core/actions_linkedfiles.inc.php';
+	}
+}
+
 $title = $langs->trans('Raccordement');
 llxHeader('', $title, '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-card');
 
@@ -673,20 +693,39 @@ if ($action === 'create' || $action === 'edit') {
 	print '<div class="fichecenter">';
 	print '<div class="fichehalfleft">';
 	print '<table class="border centpercent tableforfield">';
-	$thirdpartyValue = ((int) $object->fk_soc > 0 ? '<a href="'.DOL_URL_ROOT.'/societe/card.php?socid='.((int) $object->fk_soc).'">'.((int) $object->fk_soc).'</a>' : '');
+	$thirdpartyValue = '';
+	if ((int) $object->fk_soc > 0) {
+		$thirdparty = new Societe($db);
+		if ($thirdparty->fetch((int) $object->fk_soc) > 0) {
+			$thirdpartyOption = (!empty($user->admin) || $user->hasRight('societe', 'lire')) ? '' : 'nolink';
+			$thirdpartyValue = $thirdparty->getNomUrl(1, $thirdpartyOption);
+		} else {
+			$thirdpartyValue = '<span class="opacitymedium">#'.((int) $object->fk_soc).'</span>';
+		}
+	}
 	procedurespvPrintDraftEditableRow($object, 'fk_soc', $langs->trans('ThirdParty'), $thirdpartyValue, procedurespvRenderDraftFieldInput($object, 'fk_soc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 
-	$projectValue = ((int) $object->fk_project > 0 ? '<a href="'.DOL_URL_ROOT.'/projet/card.php?id='.((int) $object->fk_project).'">'.((int) $object->fk_project).'</a>' : '');
+	$projectValue = '';
+	if ((int) $object->fk_project > 0) {
+		$project = new Project($db);
+		if ($project->fetch((int) $object->fk_project) > 0) {
+			$projectOption = (!empty($user->admin) || $user->hasRight('projet', 'lire')) ? '' : 'nolink';
+			$projectValue = $project->getNomUrl(1, $projectOption);
+		} else {
+			$projectValue = '<span class="opacitymedium">#'.((int) $object->fk_project).'</span>';
+		}
+	}
 	procedurespvPrintDraftEditableRow($object, 'fk_project', $langs->trans('Project'), $projectValue, procedurespvRenderDraftFieldInput($object, 'fk_project', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 
 	$centraleValue = '';
 	if ((int) $object->fk_centrale_pv > 0) {
-		$centraleLabel = $centralePVAdapter->getCentraleLabel((int) $object->fk_centrale_pv);
-		$centraleUrl = $centralePVAdapter->getCentraleUrl((int) $object->fk_centrale_pv);
-		if ($centraleUrl !== '') {
-			$centraleValue = '<a href="'.$centraleUrl.'">'.dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv).'</a>';
-		} else {
-			$centraleValue = dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : (string) $object->fk_centrale_pv);
+		$centraleModuleKey = $centralePVAdapter->getMainMenuKey();
+		$canReadCentrale = !empty($user->admin)
+			|| ($centraleModuleKey === 'powerplantpv' && $user->hasRight('powerplantpv', 'powerplant', 'read'));
+		$centraleValue = $centralePVAdapter->getCentraleNomUrl((int) $object->fk_centrale_pv, 1, $canReadCentrale ? '' : 'nolink');
+		if ($centraleValue === '') {
+			$centraleLabel = $centralePVAdapter->getCentraleLabel((int) $object->fk_centrale_pv);
+			$centraleValue = '<span class="opacitymedium">'.dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : '#'.((int) $object->fk_centrale_pv)).'</span>';
 		}
 	}
 	procedurespvPrintDraftEditableRow($object, 'fk_centrale_pv', $langs->trans('CentralePV'), $centraleValue, procedurespvRenderDraftFieldInput($object, 'fk_centrale_pv', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
@@ -708,7 +747,15 @@ if ($action === 'create' || $action === 'edit') {
 	procedurespvPrintDraftEditableRow($object, 'puissance_installee_kwc', $langs->trans('InstalledPowerKwc'), price((float) $object->puissance_installee_kwc).' kWc'.($installedPowerIsDerived ? ' <span class="opacitymedium">'.$langs->trans('InstalledPowerDerivedFromModules').'</span>' : ''), procedurespvRenderDraftFieldInput($object, 'puissance_installee_kwc', $form, $formproject, $centralePVAdapter), $canEditDraftFields && !$installedPowerIsDerived, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'puissance_injection_kva', $langs->trans('InjectionPowerKva'), price((float) $object->puissance_injection_kva).' kVA', procedurespvRenderDraftFieldInput($object, 'puissance_injection_kva', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'ref_enedis', $langs->trans('EnedisReference'), dol_escape_htmltag((string) $object->ref_enedis), procedurespvRenderDraftFieldInput($object, 'ref_enedis', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
-	$responsibleValue = ((int) $object->fk_user_resp > 0 ? '<a href="'.DOL_URL_ROOT.'/user/card.php?id='.((int) $object->fk_user_resp).'">'.((int) $object->fk_user_resp).'</a>' : '');
+	$responsibleValue = '';
+	if ((int) $object->fk_user_resp > 0) {
+		$responsible = new User($db);
+		if ($responsible->fetch((int) $object->fk_user_resp) > 0) {
+			$responsibleValue = $responsible->getNomUrl(-1);
+		} else {
+			$responsibleValue = '<span class="opacitymedium">#'.((int) $object->fk_user_resp).'</span>';
+		}
+	}
 	procedurespvPrintDraftEditableRow($object, 'fk_user_resp', $langs->trans('Responsible'), $responsibleValue, procedurespvRenderDraftFieldInput($object, 'fk_user_resp', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	print '<tr><td>'.$langs->trans('NextAction').'</td><td colspan="2">'.$langs->trans($object->getNextAction()).'</td></tr>';
 	print '<tr><td>'.$langs->trans('LatestRelance').'</td><td colspan="2">'.($relanceSummary['last_sent'] ? dol_print_date((int) $relanceSummary['last_sent'], 'dayhour') : '').'</td></tr>';
@@ -760,9 +807,109 @@ if ($action === 'create' || $action === 'edit') {
 
 	print '<br><div class="fichecenter">';
 	print '<div class="fichehalfleft">';
-	$uploadDir = procedurespvGetRaccordementUploadDir($object);
-	$urlsource = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id;
-	print $formfile->showdocuments('procedurespv', dol_sanitizeFileName((string) $object->ref), $uploadDir, $urlsource, 0, 0, '', 0, 0, 0, 28, 0, 'entity='.(int) $object->entity, '', '', $langs->defaultlang, '', $object);
+	if ($upload_dir !== '') {
+		$urlsource = dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id;
+		$relativepathwithnofile = dol_sanitizeFileName((string) $object->ref).'/';
+		$filearray = dol_dir_list($upload_dir, 'files', 0, '', '(\.meta|_preview.*\.png)$', 'date', SORT_DESC, 1);
+		if (!is_array($filearray)) {
+			$filearray = array();
+		}
+
+		if ($action === 'deletefile' || $action === 'deletelink') {
+			print $form->formconfirm(
+				$urlsource.'&urlfile='.urlencode(GETPOST('urlfile', 'alpha', 0, null, null, 1)).'&linkid='.GETPOSTINT('linkid'),
+				$langs->trans('DeleteFile'),
+				$langs->trans('ConfirmDeleteFile'),
+				'confirm_deletefile',
+				'',
+				'',
+				1
+			);
+		}
+
+		$attachmentForms = $formfile->form_attach_new_file(
+			$urlsource.'&entity='.(int) $object->entity,
+			'',
+			0,
+			0,
+			(int) $permissiontoadd,
+			$conf->browser->layout === 'phone' ? 40 : 60,
+			$object,
+			'',
+			1,
+			'',
+			1,
+			'formuserfile',
+			'',
+			'',
+			0,
+			0,
+			0,
+			2
+		);
+		$formToUploadAFile = '';
+		if (is_array($attachmentForms) && isset($attachmentForms['formToUploadAFile'])) {
+			$formToUploadAFile = (string) $attachmentForms['formToUploadAFile'];
+		}
+
+		if (version_compare(DOL_VERSION, '21.0.0', '>=')) {
+			$formfile->list_of_documents(
+				$filearray,
+				$object,
+				$modulepart,
+				'&id='.(int) $object->id.'&entity='.(int) $object->entity,
+				0,
+				$relativepathwithnofile,
+				(int) $permissiontoadd,
+				0,
+				'',
+				0,
+				'',
+				$urlsource,
+				0,
+				(int) $permissiontoadd,
+				$upload_dir,
+				'date',
+				'DESC',
+				1,
+				0,
+				1,
+				'',
+				array('afteruploadtitle' => $formToUploadAFile, 'showhideaddbutton' => 1)
+			);
+		} else {
+			// Dolibarr v20 has the native list and upload form, but not the compact moreoptions parameter added in v21.
+			$formfile->list_of_documents(
+				$filearray,
+				$object,
+				$modulepart,
+				'&id='.(int) $object->id.'&entity='.(int) $object->entity,
+				0,
+				$relativepathwithnofile,
+				(int) $permissiontoadd,
+				0,
+				'',
+				0,
+				'',
+				$urlsource,
+				0,
+				(int) $permissiontoadd,
+				$upload_dir,
+				'date',
+				'DESC',
+				1,
+				0,
+				1,
+				''
+			);
+			if ($formToUploadAFile !== '') {
+				print $formToUploadAFile;
+			}
+		}
+	} else {
+		print load_fiche_titre($langs->trans('AttachedFiles'), '', 'file-upload');
+		print '<div class="warning">'.$langs->trans('ErrorFailedToCreateDir').'</div>';
+	}
 	print '</div>';
 	print '<div class="fichehalfright">';
 	if (isModEnabled('agenda')) {
