@@ -21,11 +21,11 @@
 
 1. Créer un raccordement depuis `Raccordement > Nouveau raccordement`.
 2. Renseigner le client, le projet, l'identifiant Centrale PV et sélectionner `Centrale PV` comme source du site.
-3. Enregistrer puis vérifier que le nom du site, l'adresse, le code postal, la commune et le PRM/PDL disponibles dans la centrale sont repris dans le raccordement.
+3. Enregistrer puis vérifier que le nom du site, l'adresse, le code postal, la commune, le PRM/PDL, la puissance installée et la puissance du raccordement disponibles dans la centrale sont repris dans le raccordement.
 4. Ouvrir l'onglet `Collecte client` et générer un lien public de collecte.
 5. Ouvrir le lien public et vérifier que les données du site de la centrale sont préremplies.
 6. Corriger au moins une donnée du site, compléter les informations, déposer une facture d'électricité et signer le mandat.
-7. Revenir côté interne et vérifier que la correction figure dans le raccordement et dans la centrale PV sélectionnée.
+7. Revenir côté interne et vérifier que les corrections, y compris celles des puissances, figurent dans le raccordement et dans la centrale PV sélectionnée.
 8. Vérifier dans le tableau des pièces que l'origine commence par une majuscule et que l'absence de fichier affiche le libellé natif « Pas de documents téléversés ».
 9. Valider la pièce et le mandat.
 10. Ouvrir `Demande de raccordement`, renseigner la référence ENEDIS et marquer déposé.
@@ -176,7 +176,7 @@ Résultats attendus : la synchronisation est atomique, respecte les droits et ne
 5. Modifier ensuite le catalogue : l’instantané existant ne change pas ; après suppression/réajout, la valeur actuelle est reprise.
 6. Tester un produit d’une mauvaise catégorie et un produit d’une entité inaccessible.
 
-Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, les caractéristiques manquantes sont corrigées uniquement via les API PowerPlantPV et `puissance_injection_kva` reste indépendante.
+Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, les caractéristiques manquantes sont corrigées uniquement via les API PowerPlantPV et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
 
 ## Scénario 9 - Documents, Agenda et Multicompany
 
