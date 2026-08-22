@@ -284,45 +284,6 @@ function procedurespvStoreRaccordementUpload($fieldName, $object, $code, $label,
 }
 
 /**
- * Create one native Agenda event for a business update.
- *
- * CRUD triggers are exposed for integrations, but are not registered for
- * automatic Agenda creation, so this remains the single event creation path.
- *
- * @param Raccordement $object Parent object
- * @param User $user Acting user
- * @param string $label Translation key or readable label
- * @param string $note Event details
- * @return int Event id or 0
- */
-function procedurespvCreateAgendaEvent($object, $user, $label, $note = '')
-{
-	global $db, $langs;
-	if (!isModEnabled('agenda') || !is_readable(DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php')) {
-		return 0;
-	}
-	require_once DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php';
-	$actioncomm = new ActionComm($db);
-	$actioncomm->type_code = 'AC_OTH_AUTO';
-	$translated = $langs->trans($label);
-	$actioncomm->label = ($translated !== $label ? $translated : $label).' - '.$object->ref;
-	$actioncomm->datep = dol_now();
-	$actioncomm->datef = dol_now();
-	$actioncomm->percentage = 100;
-	$actioncomm->elementtype = $object->element.'@procedurespv';
-	$actioncomm->fk_element = (int) $object->id;
-	$actioncomm->socid = (int) $object->fk_soc;
-	$actioncomm->fk_project = (int) $object->fk_project;
-	$actioncomm->note_private = $note;
-	$result = $actioncomm->create($user);
-	if ($result < 0) {
-		dol_syslog('procedurespvCreateAgendaEvent failed: '.$actioncomm->error, LOG_WARNING);
-		return 0;
-	}
-	return (int) $result;
-}
-
-/**
  * Return module output directory for an entity.
  *
  * @param int $entity Entity id

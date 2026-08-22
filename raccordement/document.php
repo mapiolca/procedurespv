@@ -89,20 +89,28 @@ $hookmanager->initHooks(array('procedurespvraccordementdocument', 'globalcard'))
 
 include DOL_DOCUMENT_ROOT.'/core/actions_linkedfiles.inc.php';
 
-if ($reconcileWorkflow > 0) {
+$fileMutationCompleted = empty($error) && (
+	GETPOST('sendit', 'alpha') !== ''
+	|| GETPOST('linkit', 'restricthtml') !== ''
+	|| ($action === 'confirm_updateline' && GETPOST('save', 'alpha') !== '')
+	|| ($action === 'renamefile' && GETPOST('renamefilesave', 'alpha') !== '')
+);
+if ($reconcileWorkflow > 0 || $fileMutationCompleted) {
 	$workflow = new RaccordementWorkflow($db);
 	$targetStatus = $workflow->getReconciledStatus($object);
 	if ($targetStatus !== (int) $object->status) {
 		$object->context['trigger_reason'] = 'document_change';
 		$object->context['changed_fields'] = array('documents', 'status');
-		if ($object->setStatus($user, $targetStatus) > 0) {
-			procedurespvCreateAgendaEvent($object, $user, 'AgendaRaccordementDocumentUpdated');
-		} else {
+		if ($object->setStatus($user, $targetStatus) <= 0) {
 			setEventMessages($object->error, $object->errors, 'errors');
 		}
+	} elseif ($object->triggerUserAction($user, 'document_change', array('documents')) < 0) {
+		setEventMessages($object->error, $object->errors, 'errors');
 	}
-	header('Location: '.$_SERVER['PHP_SELF'].'?id='.(int) $object->id);
-	exit;
+	if ($reconcileWorkflow > 0) {
+		header('Location: '.$_SERVER['PHP_SELF'].'?id='.(int) $object->id);
+		exit;
+	}
 }
 
 $form = new Form($db);

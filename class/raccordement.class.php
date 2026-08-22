@@ -132,6 +132,10 @@ class Raccordement extends CommonObject
 
 	public $rowid;
 	public $id;
+	/** @var string|null Native Agenda event description, populated only while calling a trigger. */
+	public $actionmsg;
+	/** @var string|null Native Agenda event label, populated only while calling a trigger. */
+	public $actionmsg2;
 	public $entity;
 	public $ref;
 	public $fk_soc;
@@ -270,13 +274,21 @@ class Raccordement extends CommonObject
 			return -1;
 		}
 
+		$this->db->begin();
 		$result = $this->createCommon($user, 1);
 		if ($result > 0 && !$notrigger) {
-			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_CREATE', $user);
+			$triggerResult = $this->callProceduresPVTrigger('PVPROC_RACCORDEMENT_CREATE', $user, 'raccordement_created');
 			if ($triggerResult < 0) {
+				$this->db->rollback();
 				return -1;
 			}
 		}
+		if ($result <= 0) {
+			$this->db->rollback();
+			return $result;
+		}
+		$this->db->commit();
+
 		return $result;
 	}
 
@@ -328,12 +340,33 @@ class Raccordement extends CommonObject
 	 */
 	public function triggerContactUpdate($user, $operation, $contactLineId = 0)
 	{
-		$this->context['trigger_reason'] = 'contact_change';
-		$this->context['changed_fields'] = array('contacts');
 		$this->context['contact_operation'] = $operation;
 		$this->context['contact_line_id'] = $contactLineId;
 
-		return $this->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $user);
+		return $this->triggerUserAction($user, 'contact_change', array('contacts'));
+	}
+
+	/**
+	 * Expose a mutation of a child record through the parent CRUD update event.
+	 *
+	 * @param User $user User performing the action
+	 * @param string $reason Stable business reason
+	 * @param array<int,string> $changedFields Aggregate fields or relations changed
+	 * @param string $details Optional readable event details
+	 * @return int
+	 */
+	public function triggerUserAction($user, $reason, $changedFields = array(), $details = '')
+	{
+		if (!isset($this->context) || !is_array($this->context)) {
+			$this->context = array();
+		}
+		$this->context['trigger_reason'] = $reason;
+		$this->context['changed_fields'] = array_values($changedFields);
+		if ($details !== '') {
+			$this->context['agenda_details'] = $details;
+		}
+
+		return $this->callProceduresPVTrigger('PVPROC_RACCORDEMENT_UPDATE', $user, 'raccordement_updated');
 	}
 
 	/**
@@ -374,13 +407,21 @@ class Raccordement extends CommonObject
 	{
 		$this->fk_user_modif = is_object($user) ? (int) $user->id : 0;
 
+		$this->db->begin();
 		$result = $this->updateCommon($user, 1);
 		if ($result > 0 && !$notrigger) {
-			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $user);
+			$triggerResult = $this->callProceduresPVTrigger('PVPROC_RACCORDEMENT_UPDATE', $user, 'raccordement_updated');
 			if ($triggerResult < 0) {
+				$this->db->rollback();
 				return -1;
 			}
 		}
+		if ($result <= 0) {
+			$this->db->rollback();
+			return $result;
+		}
+		$this->db->commit();
+
 		return $result;
 	}
 
@@ -393,14 +434,146 @@ class Raccordement extends CommonObject
 	 */
 	public function delete($user, $notrigger = 0)
 	{
+		$this->db->begin();
 		$result = $this->deleteCommon($user, 1);
 		if ($result > 0 && !$notrigger) {
-			$triggerResult = $this->call_trigger('PVPROC_RACCORDEMENT_DELETE', $user);
+			$triggerResult = $this->callProceduresPVTrigger('PVPROC_RACCORDEMENT_DELETE', $user, 'raccordement_deleted');
 			if ($triggerResult < 0) {
+				$this->db->rollback();
 				return -1;
 			}
 		}
+		if ($result <= 0) {
+			$this->db->rollback();
+			return $result;
+		}
+		$this->db->commit();
+
 		return $result;
+	}
+
+	/**
+	 * Prepare the native Agenda context and execute one stable CRUD trigger.
+	 *
+	 * Dolibarr's Agenda trigger consumes actionmsg/actionmsg2 and creates the
+	 * ActionComm according to MAIN_AGENDA_ACTIONAUTO_<TRIGGER_CODE>.
+	 *
+	 * @param string $triggerCode CRUD trigger code
+	 * @param User $user Acting user
+	 * @param string $defaultReason Fallback business reason
+	 * @return int
+	 */
+	private function callProceduresPVTrigger($triggerCode, $user, $defaultReason)
+	{
+		global $langs;
+		/** @var Translate $langs */
+
+		if (!isset($this->context) || !is_array($this->context)) {
+			$this->context = array();
+		}
+
+		$reason = isset($this->context['trigger_reason']) && is_string($this->context['trigger_reason']) && $this->context['trigger_reason'] !== ''
+			? $this->context['trigger_reason']
+			: $defaultReason;
+		$labelKey = $this->getAgendaLabelKey($reason);
+		$langs->loadLangs(array('procedurespv@procedurespv'));
+		$label = $langs->transnoentitiesnoconv($labelKey);
+		if ($label === $labelKey) {
+			$label = $langs->transnoentitiesnoconv('AgendaRaccordementUpdated');
+		}
+		$details = isset($this->context['agenda_details']) && is_string($this->context['agenda_details'])
+			? trim($this->context['agenda_details'])
+			: '';
+
+		$objectvars = get_object_vars($this);
+		$hadActionMsg = array_key_exists('actionmsg', $objectvars);
+		$hadActionMsg2 = array_key_exists('actionmsg2', $objectvars);
+		$hadActionTypeCode = array_key_exists('actiontypecode', $objectvars);
+		$oldActionMsg = $hadActionMsg ? $this->actionmsg : null;
+		$oldActionMsg2 = $hadActionMsg2 ? $this->actionmsg2 : null;
+		$oldActionTypeCode = $hadActionTypeCode ? $this->actiontypecode : null;
+
+		$this->context['trigger_reason'] = $reason;
+		$this->context['actionmsg2'] = $label.' - '.(string) $this->ref;
+		$this->context['actionmsg'] = $details !== ''
+			? $details
+			: $langs->transnoentitiesnoconv('AgendaRaccordementEventDetails', $label, (string) $this->ref);
+		$this->actiontypecode = 'AC_OTH_AUTO';
+		$this->actionmsg2 = $this->context['actionmsg2'];
+		$this->actionmsg = $this->context['actionmsg'];
+
+		$result = $this->call_trigger($triggerCode, $user);
+		foreach (array('trigger_reason', 'changed_fields', 'agenda_details', 'agenda_label_key', 'actionmsg', 'actionmsg2', 'actionmsgmore', 'actionmsg2more', 'old_status', 'new_status', 'contact_operation', 'contact_line_id') as $contextKey) {
+			unset($this->context[$contextKey]);
+		}
+		if ($hadActionMsg) {
+			$this->actionmsg = $oldActionMsg;
+		} else {
+			unset($this->actionmsg);
+		}
+		if ($hadActionMsg2) {
+			$this->actionmsg2 = $oldActionMsg2;
+		} else {
+			unset($this->actionmsg2);
+		}
+		if ($hadActionTypeCode) {
+			$this->actiontypecode = $oldActionTypeCode;
+		} else {
+			unset($this->actiontypecode);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Resolve a business reason to a translated native Agenda label.
+	 *
+	 * @param string $reason Stable business reason
+	 * @return string Translation key
+	 */
+	private function getAgendaLabelKey($reason)
+	{
+		if (isset($this->context['agenda_label_key']) && is_string($this->context['agenda_label_key']) && $this->context['agenda_label_key'] !== '') {
+			return $this->context['agenda_label_key'];
+		}
+
+		$labels = array(
+			'raccordement_created' => 'AgendaRaccordementCreated',
+			'raccordement_updated' => 'AgendaRaccordementUpdated',
+			'raccordement_deleted' => 'AgendaRaccordementDeleted',
+			'status_change' => 'AgendaRaccordementStatusUpdated',
+			'snapshot_freeze' => 'SnapshotFrozen',
+			'contact_change' => 'AgendaRaccordementContactUpdated',
+			'beneficiary_synchronized' => 'AgendaBeneficiarySynchronized',
+			'centralepv_site_prefill' => 'AgendaCentraleSiteDataSynchronized',
+			'draft_field_update' => 'AgendaRaccordementUpdated',
+			'equipment_changed' => 'EquipmentUpdatedAgendaEvent',
+			'collection_link_created' => 'AgendaCollecteLinkCreated',
+			'collection_reopened' => 'AgendaCollecteReopened',
+			'collection_link_revoked' => 'AgendaCollecteLinkRevoked',
+			'collection_document_uploaded' => 'AgendaCollectionDocumentUploaded',
+			'collection_document_validated' => 'AgendaCollectionDocumentValidated',
+			'collection_document_refused' => 'AgendaCollectionDocumentRefused',
+			'mandate_validated' => 'AgendaMandateValidated',
+			'mandate_refused' => 'AgendaMandateRefused',
+			'collection_validated' => 'AgendaCollectionValidated',
+			'cardi_update' => 'AgendaCardiUpdated',
+			'enedis_request_update' => 'AgendaEnedisRequestUpdated',
+			'mes_update' => 'AgendaMesUpdated',
+			'document_change' => 'AgendaRaccordementDocumentUpdated',
+			'public_collecte_opened' => 'AgendaCollecteOpened',
+			'public_collecte_saved_mobile' => 'AgendaCollecteSavedForMobile',
+			'public_collecte_submitted' => 'AgendaCollecteSubmitted',
+			'convention_created' => 'AgendaConventionCreated',
+			'convention_updated' => 'AgendaConventionUpdated',
+			'convention_status_changed' => 'AgendaConventionStatusUpdated',
+			'relance_created' => 'AgendaRelanceCreated',
+			'relance_updated' => 'AgendaRelanceUpdated',
+			'relance_sent' => 'AgendaRelanceSent',
+			'relance_canceled' => 'AgendaRelanceCanceled',
+		);
+
+		return isset($labels[$reason]) ? $labels[$reason] : 'AgendaRaccordementUpdated';
 	}
 
 	/**
@@ -546,9 +719,14 @@ class Raccordement extends CommonObject
 	 */
 	public function setStatus($user, $status)
 	{
+		$oldStatus = (int) $this->status;
 		$this->status = (int) $status;
-		$this->context['trigger_reason'] = 'status_change';
+		if (empty($this->context['trigger_reason'])) {
+			$this->context['trigger_reason'] = 'status_change';
+		}
 		$this->context['changed_fields'] = array('status');
+		$this->context['old_status'] = $oldStatus;
+		$this->context['new_status'] = (int) $status;
 
 		return $this->update($user);
 	}

@@ -182,7 +182,6 @@ if (in_array($action, $sensitiveActions, true)) {
 				}
 			}
 		}
-		procedurespvCreateAgendaEvent($object, $user, 'AgendaMesUpdated');
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/mes.php', 1).'?id='.(int) $object->id);
 		exit;

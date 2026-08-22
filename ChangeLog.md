@@ -10,8 +10,8 @@
 - Ajout de l’onglet Demande de raccordement et des champs techniques ENEDIS.
 - Ajout de l’onglet CARDi et de son workflow interne.
 - Ajout de l’onglet Convention / contrat avec table enfant, statuts et suivi multi-documents.
-- Ajout de l’onglet Mise en service avec dates, Consuel, autorisation d’injection et événement Agenda à la réalisation.
-- Ajout de l’onglet Relances avec planification, marquage envoyé/annulé, événement Agenda manuel et indicateurs sur la synthèse.
+- Ajout de l’onglet Mise en service avec dates, Consuel, autorisation d’injection et suivi Agenda.
+- Ajout de l’onglet Relances avec planification, marquage envoyé/annulé, suivi Agenda et indicateurs sur la synthèse.
 - Complément de la configuration module, des filtres opérationnels de liste et de la recette fonctionnelle V1.
 - Remplacement des champs texte de modèles de courriels par des sélecteurs natifs Dolibarr filtrés par type d’objet.
 - Remplacement du champ texte du modèle PDF mandat ENEDIS par la gestion native des modèles de documents Dolibarr.
@@ -60,3 +60,4 @@
 - Alignement du mandat de représentation sur le modèle FR30-V04 / FOR_RAC_02E : données limitées au modèle, quatre pouvoirs obligatoires dans le formulaire public et mise en page inspirée des attestations PowerPlantPV.
 - Correction de la détection de l’étape active dans la collecte publique : la section cliquée reste sélectionnée pendant le défilement et le seuil d’activation tient compte de la zone réellement visible sous la barre fixe.
 - Remplacement de l’introduction publique du mandat par le texte contractuel, simplification du premier pouvoir et déplacement du détail des documents dans l’infobulle d’information native Dolibarr.
+- Intégration native des événements Agenda par les triggers CRUD `PVPROC_RACCORDEMENT_CREATE`, `UPDATE` et `DELETE`, avec libellés propres à chaque action utilisateur, résolution de l’objet externe par hook et suppression des créations `ActionComm` manuelles afin d’éviter les doublons.

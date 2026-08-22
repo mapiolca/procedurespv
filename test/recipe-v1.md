@@ -145,8 +145,8 @@
 
 ### Points de contrôle techniques
 
-- `fk_actioncomm` est renseigné lorsque l'événement Agenda est créé.
-- Relancer l'action envoyée sur une relance déjà liée ne doit pas créer un doublon Agenda.
+- L’événement provient du trigger CRUD `PVPROC_RACCORDEMENT_UPDATE` configuré dans l’Agenda natif ; le champ historique `fk_actioncomm` de la relance peut rester vide.
+- Rejouer une action autorisée ne doit produire qu’un événement pour cette exécution, sans événement manuel en doublon.
 
 ## Scénario 6 - Révision, mandat et pièces justificatives
 
@@ -180,12 +180,15 @@ Résultats attendus : aucune liste d’identifiants n’est stockée, les instan
 
 ## Scénario 9 - Documents, Agenda et Multicompany
 
-1. Déposer chaque document technique et justificatif, puis contrôler sa présence dans `Fichiers joints`.
-2. Vérifier les liens d’aperçu et de téléchargement avec un utilisateur en lecture seule.
-3. Contrôler l’unicité des événements Agenda après dépôt, validation/refus, soumission, synchronisation et modification des équipements.
-4. Refaire la recette sur un raccordement appartenant à une seconde entité puis consulté par partage.
+1. Activer le module Agenda, puis ouvrir sa configuration native et vérifier la présence des trois événements `PVPROC_RACCORDEMENT_CREATE`, `PVPROC_RACCORDEMENT_UPDATE` et `PVPROC_RACCORDEMENT_DELETE`.
+2. Activer les trois événements, créer un raccordement, puis exécuter successivement : modification de la fiche, changement d’état, ajout/retrait de contact, génération/révocation de collecte, dépôt et contrôle d’une pièce, validation/refus du mandat, sauvegarde mobile et soumission publique, modification ENEDIS/CARD-i/MES, ajout/modification/changement d’état d’une convention, ajout/modification/envoi/annulation d’une relance, ajout/renommage/suppression d’un fichier joint.
+3. Déposer chaque document technique et justificatif, puis contrôler sa présence dans `Fichiers joints` et vérifier les liens d’aperçu/téléchargement avec un utilisateur en lecture seule.
+4. Dans `Événements/Agenda`, vérifier après chaque action qu’un seul événement a été créé, que son libellé décrit l’action réalisée, que le tiers et le projet sont liés lorsqu’ils existent et que, hors suppression définitive, le lien objet ouvre le raccordement sans afficher `Objet supprimé`.
+5. Désactiver uniquement `PVPROC_RACCORDEMENT_UPDATE` dans la configuration Agenda, modifier le raccordement et vérifier l’absence de nouvel événement ; le réactiver ensuite.
+6. Désactiver puis réactiver ProceduresPV et vérifier que les choix Agenda sont conservés et qu’aucune ligne `c_action_trigger` n’est dupliquée.
+7. Refaire la recette sur un raccordement appartenant à une seconde entité puis consulté par partage.
 
-Résultats attendus : les fichiers restent dans le répertoire de l’entité propriétaire, aucun événement n’est dupliqué et les droits d’écriture restent distincts du droit de lecture documentaire.
+Résultats attendus : les fichiers restent dans le répertoire de l’entité propriétaire, chaque action utilisateur passe par un unique trigger CRUD et le module Agenda est le seul créateur d’`ActionComm`. Les réglages Agenda sont conservés, aucun événement n’est dupliqué et les droits d’écriture restent distincts du droit de lecture documentaire.
 
 ## Scénario 10 - Pages transverses natives indépendantes
 

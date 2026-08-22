@@ -13,8 +13,8 @@ require_once DOL_DOCUMENT_ROOT.'/core/triggers/dolibarrtriggers.class.php';
  * ProceduresPV trigger interface.
  *
  * Raccordement methods expose stable CRUD events. Business details are
- * carried by the object context and Agenda events keep their single,
- * explicit creation path in the module services.
+ * carried by the object context. The native Agenda module consumes the
+ * c_action_trigger declaration and remains the single ActionComm creator.
  */
 class InterfaceProceduresPVTriggers extends DolibarrTriggers
 {
@@ -53,7 +53,7 @@ class InterfaceProceduresPVTriggers extends DolibarrTriggers
 		}
 
 		// The CRUD event is intentionally exposed for native integrations.
-		// Agenda creation is handled once by procedurespvCreateAgendaEvent().
+		// Do not create ActionComm here: Agenda's ActionsAuto trigger owns it.
 		return 0;
 	}
 }

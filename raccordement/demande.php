@@ -181,7 +181,7 @@ if (in_array($action, $sensitiveActions, true)) {
 		$equipmentSaved = $result > 0;
 		if ($result < 0) {
 			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
-		} elseif ($object->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $user) < 0) {
+		} elseif ($object->triggerUserAction($user, 'equipment_changed', array('equipment')) < 0) {
 			$result = -1;
 			setEventMessages($object->error, $object->errors, 'errors');
 		}
@@ -189,15 +189,6 @@ if (in_array($action, $sensitiveActions, true)) {
 		$result = $object->update($user);
 	}
 	if ($result > 0) {
-		if ($equipmentSaved && $technicalDocumentsUploaded) {
-			procedurespvCreateAgendaEvent($object, $user, 'AgendaEnedisRequestUpdated');
-		} elseif ($equipmentSaved) {
-			procedurespvCreateAgendaEvent($object, $user, 'EquipmentUpdatedAgendaEvent');
-		} elseif ($technicalDocumentsUploaded) {
-			procedurespvCreateAgendaEvent($object, $user, 'AgendaCollectionDocumentUploaded');
-		} else {
-			procedurespvCreateAgendaEvent($object, $user, 'AgendaEnedisRequestUpdated');
-		}
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/demande.php', 1).'?id='.(int) $object->id);
 		exit;

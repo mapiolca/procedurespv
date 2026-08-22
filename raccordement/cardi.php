@@ -126,7 +126,6 @@ if ($action === 'save' || isset($cardiTransitions[$action])) {
 	$object->context['changed_fields'] = array('cardi_required', 'cardi_status', 'status');
 	$result = $object->update($user);
 	if ($result > 0) {
-		procedurespvCreateAgendaEvent($object, $user, 'AgendaCardiUpdated');
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/cardi.php', 1).'?id='.(int) $object->id);
 		exit;

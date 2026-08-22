@@ -183,6 +183,12 @@ if ($action === 'add_convention') {
 		$result = $convention->update($payload);
 	}
 	if ($result > 0) {
+		$details = trim((string) $convention->type_convention.' '.(string) $convention->ref_convention);
+		if ($object->triggerUserAction($user, 'convention_created', array('conventions', 'documents'), $details) < 0) {
+			$result = -1;
+		}
+	}
+	if ($result > 0) {
 		$db->commit();
 		setEventMessages($langs->trans('ConventionCreated'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id);
@@ -218,6 +224,12 @@ if ($action === 'update_convention') {
 	$result = $upload['result'];
 	if ($result > 0) {
 		$result = $convention->update($payload);
+	}
+	if ($result > 0) {
+		$details = trim((string) $convention->type_convention.' '.(string) $convention->ref_convention);
+		if ($object->triggerUserAction($user, 'convention_updated', array('conventions', 'documents'), $details) < 0) {
+			$result = -1;
+		}
 	}
 	if ($result > 0) {
 		$db->commit();
@@ -264,7 +276,17 @@ if (isset($statusActions[$action])) {
 		$object->status = $targetStatus;
 		$targetStatus = $workflow->getReconciledStatus($object);
 		if ($targetStatus !== $originalStatus) {
+			$object->context['trigger_reason'] = 'convention_status_changed';
+			$object->context['changed_fields'] = array('conventions', 'status');
+			$object->context['agenda_details'] = trim((string) $convention->type_convention.' '.(string) $convention->ref_convention);
 			$result = $object->setStatus($user, $targetStatus);
+		} elseif ($object->triggerUserAction(
+			$user,
+			'convention_status_changed',
+			array('conventions'),
+			trim((string) $convention->type_convention.' '.(string) $convention->ref_convention)
+		) < 0) {
+			$result = -1;
 		}
 		if ($result > 0) {
 			$db->commit();

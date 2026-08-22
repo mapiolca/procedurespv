@@ -76,7 +76,6 @@ if ($action === 'generate_link') {
 		if ($result > 0) {
 			$db->commit();
 			$generatedPublicUrl = $newLink->getPublicUrl($rawToken);
-			procedurespvCreateAgendaEvent($object, $user, empty($prefillPayload) ? 'AgendaCollecteLinkCreated' : 'AgendaCollecteReopened');
 			setEventMessages($langs->trans('PublicLinkGenerated'), null, 'mesgs');
 			$latestLink = $newLink;
 		} else {
@@ -94,11 +93,20 @@ if ($action === 'revoke_link') {
 	if (!$permissiontosend || (int) $latestLink->id !== GETPOSTINT('linkid') || (int) $latestLink->status !== PublicLink::STATUS_ACTIVE) {
 		accessforbidden($langs->trans('InvalidStatusTransition'));
 	}
-	if ($latestLink->revoke() > 0) {
-		procedurespvCreateAgendaEvent($object, $user, 'AgendaCollecteLinkRevoked');
+	$db->begin();
+	$result = $latestLink->revoke();
+	if ($result > 0) {
+		$triggerResult = $object->triggerUserAction($user, 'collection_link_revoked', array('public_links'));
+		if ($triggerResult < 0) {
+			$result = -1;
+		}
+	}
+	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans('PublicLinkRevoked'), null, 'mesgs');
 	} else {
-		setEventMessages($latestLink->error, $latestLink->errors, 'errors');
+		$db->rollback();
+		setEventMessages($result < 0 && $object->error !== '' ? $object->error : $latestLink->error, !empty($object->errors) ? $object->errors : $latestLink->errors, 'errors');
 	}
 }
 
@@ -112,8 +120,12 @@ if ($action === 'upload_piece') {
 	}
 	$uploadResult = procedurespvStoreRaccordementUpload('piece_file', $object, (string) $piece->code_piece, (string) $piece->label, (string) $piece->origin, (int) $piece->required, (int) $piece->fk_publiclink);
 	if ($uploadResult['result'] > 0) {
-		procedurespvCreateAgendaEvent($object, $user, 'AgendaCollectionDocumentUploaded', (string) $piece->label);
-		setEventMessages($langs->trans('FileUploaded'), null, 'mesgs');
+		$result = $object->triggerUserAction($user, 'collection_document_uploaded', array('pieces', 'documents'), (string) $piece->label);
+		if ($result >= 0) {
+			setEventMessages($langs->trans('FileUploaded'), null, 'mesgs');
+		} else {
+			setEventMessages($object->error, $object->errors, 'errors');
+		}
 	} else {
 		setEventMessages($langs->trans($uploadResult['error']), null, 'errors');
 	}
@@ -128,11 +140,25 @@ if ($action === 'validate_piece' || $action === 'refuse_piece') {
 		accessforbidden($langs->trans('InvalidStatusTransition'));
 	}
 	$newStatus = $action === 'validate_piece' ? Piece::STATUS_VALID : Piece::STATUS_INVALID;
-	if ($piece->setValidationStatus($newStatus, $user, GETPOST('motif_refus', 'restricthtml')) > 0) {
-		procedurespvCreateAgendaEvent($object, $user, $action === 'validate_piece' ? 'AgendaCollectionDocumentValidated' : 'AgendaCollectionDocumentRefused', (string) $piece->label);
+	$db->begin();
+	$result = $piece->setValidationStatus($newStatus, $user, GETPOST('motif_refus', 'restricthtml'));
+	if ($result > 0) {
+		$triggerResult = $object->triggerUserAction(
+			$user,
+			$action === 'validate_piece' ? 'collection_document_validated' : 'collection_document_refused',
+			array('pieces'),
+			(string) $piece->label
+		);
+		if ($triggerResult < 0) {
+			$result = -1;
+		}
+	}
+	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans($action === 'validate_piece' ? 'PieceValidated' : 'PieceRefused'), null, 'mesgs');
 	} else {
-		setEventMessages($piece->error, $piece->errors, 'errors');
+		$db->rollback();
+		setEventMessages($object->error !== '' ? $object->error : $piece->error, !empty($object->errors) ? $object->errors : $piece->errors, 'errors');
 	}
 }
 
@@ -145,17 +171,27 @@ if ($action === 'validate_mandat' || $action === 'refuse_mandat') {
 		accessforbidden($langs->trans('InvalidStatusTransition'));
 	}
 	$newStatus = $action === 'validate_mandat' ? Signature::STATUS_VALIDATED : Signature::STATUS_NON_COMPLIANT;
-	if ($signature->setValidationStatus($newStatus, $user, GETPOST('motif_non_conformite', 'restricthtml')) > 0) {
+	$db->begin();
+	$result = $signature->setValidationStatus($newStatus, $user, GETPOST('motif_non_conformite', 'restricthtml'));
+	if ($result > 0) {
 		if ($newStatus === Signature::STATUS_VALIDATED) {
 			$object->date_mandat_validation = dol_now();
 			$object->context['trigger_reason'] = 'mandate_validated';
 			$object->context['changed_fields'] = array('date_mandat_validation');
-			$object->update($user);
+			$result = $object->update($user);
+		} else {
+			$triggerResult = $object->triggerUserAction($user, 'mandate_refused', array('signatures'));
+			if ($triggerResult < 0) {
+				$result = -1;
+			}
 		}
-		procedurespvCreateAgendaEvent($object, $user, $action === 'validate_mandat' ? 'AgendaMandateValidated' : 'AgendaMandateRefused');
+	}
+	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans($action === 'validate_mandat' ? 'MandatValidated' : 'MandatRefused'), null, 'mesgs');
 	} else {
-		setEventMessages($signature->error, $signature->errors, 'errors');
+		$db->rollback();
+		setEventMessages($object->error !== '' ? $object->error : $signature->error, !empty($object->errors) ? $object->errors : $signature->errors, 'errors');
 	}
 }
 
@@ -170,7 +206,6 @@ if ($action === 'validate_collection') {
 		$object->context['trigger_reason'] = 'collection_validated';
 		$object->context['changed_fields'] = array('status');
 		if ($object->update($user) > 0) {
-			procedurespvCreateAgendaEvent($object, $user, 'AgendaCollectionValidated');
 			setEventMessages($langs->trans('CollecteValidated'), null, 'mesgs');
 		} else {
 			setEventMessages($object->error, $object->errors, 'errors');

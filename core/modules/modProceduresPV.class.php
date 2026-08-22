@@ -260,6 +260,21 @@ class modProceduresPV extends DolibarrModules
 				." SELECT 'procedurespv_raccordement', '".$this->db->escape($contactType[0])."', '".$this->db->escape($contactType[1])."', '".$this->db->escape($contactType[2])."', 1, 'procedurespv', ".((int) $contactType[3])
 				.' WHERE NOT EXISTS (SELECT 1 FROM '.MAIN_DB_PREFIX."c_type_contact WHERE element = 'procedurespv_raccordement' AND source = '".$this->db->escape($contactType[0])."' AND code = '".$this->db->escape($contactType[1])."')";
 		}
+		foreach (ActionsProceduresPV::getNativeAgendaTriggerRows() as $triggerRow) {
+			$code = $this->db->escape($triggerRow['code']);
+			$elementtype = $this->db->escape($triggerRow['elementtype']);
+			$contexts = $this->db->escape($triggerRow['contexts']);
+			$label = $this->db->escape($triggerRow['label']);
+			$description = $this->db->escape($triggerRow['description']);
+			$rang = (int) $triggerRow['rang'];
+
+			$sql[] = 'INSERT INTO '.MAIN_DB_PREFIX.'c_action_trigger (elementtype, code, contexts, label, description, rang)'
+				." SELECT '".$elementtype."', '".$code."', '".$contexts."', '".$label."', '".$description."', ".$rang
+				.' FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM '.MAIN_DB_PREFIX."c_action_trigger WHERE code = '".$code."')";
+			$sql[] = 'UPDATE '.MAIN_DB_PREFIX.'c_action_trigger'
+				." SET elementtype = '".$elementtype."', contexts = '".$contexts."', label = '".$label."', description = '".$description."', rang = ".$rang
+				." WHERE code = '".$code."'";
+		}
 		$result = $this->_load_tables('/procedurespv/sql/');
 		if ($result < 0) {
 			return -1;
@@ -297,6 +312,9 @@ class modProceduresPV extends DolibarrModules
 			'PROCEDURESPV_MANDATENEDIS_ADDON_PDF' => $mandatPdfModel,
 			'PROCEDURESPV_PDF_MODEL_MANDAT_ENEDIS' => 'mandatenedis',
 			'PROCEDURESPV_MANDATENEDIS_STAMP_IMAGE' => '',
+			'MAIN_AGENDA_ACTIONAUTO_PVPROC_RACCORDEMENT_CREATE' => '1',
+			'MAIN_AGENDA_ACTIONAUTO_PVPROC_RACCORDEMENT_UPDATE' => '1',
+			'MAIN_AGENDA_ACTIONAUTO_PVPROC_RACCORDEMENT_DELETE' => '1',
 		);
 
 		foreach ($defaults as $name => $value) {

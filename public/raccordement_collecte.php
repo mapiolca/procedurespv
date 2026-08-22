@@ -934,10 +934,18 @@ if ($linkUsable && in_array($action, array('save_for_mobile', 'submit_collecte')
 		}
 		$result = empty($uploadErrors) ? $publicLink->savePayload($publicSummary) : -1;
 		if ($result > 0) {
-			$redirectUrl = dol_buildpath('/procedurespv/public/raccordement_collecte.php', 1).'?public_token='.urlencode($publicToken).'&saved_for_mobile=1#public-section-mandat';
-			header('Location: '.$redirectUrl);
-			$db->close();
-			exit;
+			$workflowUser = procedurespvPublicGetWorkflowUser($db, $object, $user);
+			$agendaUser = is_object($workflowUser) ? $workflowUser : $user;
+			$triggerResult = is_object($agendaUser)
+				? $object->triggerUserAction($agendaUser, 'public_collecte_saved_mobile', array('public_payload', 'pieces'))
+				: 0;
+			if ($triggerResult >= 0) {
+				$redirectUrl = dol_buildpath('/procedurespv/public/raccordement_collecte.php', 1).'?public_token='.urlencode($publicToken).'&saved_for_mobile=1#public-section-mandat';
+				header('Location: '.$redirectUrl);
+				$db->close();
+				exit;
+			}
+			setEventMessages($object->error, $object->errors, 'errors');
 		}
 		if (!empty($uploadErrors)) {
 			setEventMessages('', $uploadErrors, 'errors');
@@ -1124,9 +1132,15 @@ if ($linkUsable && $action === 'submit_collecte') {
 			if ($clientSiret !== '') {
 				$result = $beneficiarySync->synchronize($object, $publicSummary, $workflowUser);
 				if ($result > 0) {
-					$object->context['trigger_reason'] = 'public_collecte_submitted';
-					$object->context['changed_fields'] = array('fk_soc', 'status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'puissance_souscrite', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva');
-					$result = $object->call_trigger('PVPROC_RACCORDEMENT_UPDATE', $workflowUser);
+					$triggerResult = $object->triggerUserAction(
+						$workflowUser,
+						'public_collecte_submitted',
+						array('fk_soc', 'status', 'date_collecte_soumission', 'date_mandat_signature', 'site_name_snapshot', 'site_address_snapshot', 'site_zip_snapshot', 'site_town_snapshot', 'prm', 'type_reseau', 'puissance_souscrite', 'type_exploitation', 'puissance_installee_kwc', 'puissance_injection_kva'),
+						$langs->transnoentitiesnoconv('AgendaCollecteSubmittedDetails')
+					);
+					if ($triggerResult < 0) {
+						$result = -1;
+					}
 				}
 			} else {
 				$result = $object->update($workflowUser);
@@ -1150,7 +1164,6 @@ if ($linkUsable && $action === 'submit_collecte') {
 			$result = $collectionService->prelistRevision($object, $publicLink, $publicSummary, $langs, true);
 		}
 		if ($result > 0) {
-			procedurespvCreateAgendaEvent($object, $workflowUser, 'AgendaCollecteSubmitted', $langs->transnoentitiesnoconv('AgendaCollecteSubmittedDetails'));
 			$linkUsable = false;
 			$submissionDone = true;
 			$submittedLinkAvailable = true;

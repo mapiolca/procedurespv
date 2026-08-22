@@ -57,6 +57,10 @@ class ProceduresPVCompatibility
 		$php80 = self::isPhpVersionAtLeast('8.0.0');
 		$nativeEmailTemplates = defined('DOL_DOCUMENT_ROOT') && is_readable(DOL_DOCUMENT_ROOT.'/core/class/html.formmail.class.php');
 		$nativeDocumentModels = defined('DOL_DOCUMENT_ROOT') && is_readable(DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php');
+		$nativeAgenda = defined('DOL_DOCUMENT_ROOT')
+			&& is_readable(DOL_DOCUMENT_ROOT.'/core/triggers/interface_50_modAgenda_ActionsAuto.class.php')
+			&& function_exists('isModEnabled')
+			&& isModEnabled('agenda');
 		$powerPlantPVEquipment = false;
 		if (function_exists('isModEnabled') && isModEnabled('powerplantpv') && function_exists('dol_buildpath')) {
 			$inverterClass = dol_buildpath('/powerplantpv/class/productinverter.class.php', 0);
@@ -117,6 +121,17 @@ class ProceduresPVCompatibility
 				'compatibility_check' => "is_readable(DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php')",
 				'available' => $nativeDocumentModels,
 				'reason' => $nativeDocumentModels ? '' : 'RequiresNativeDocumentModels',
+			),
+			'native_agenda' => array(
+				'label' => 'CompatibilityFeatureNativeAgenda',
+				'description' => 'CompatibilityFeatureNativeAgendaDescription',
+				'min_dolibarr' => '20.0.0',
+				'core_available_from' => '20.0.0',
+				'module_available_from' => '20.0.0',
+				'min_php' => '8.0.0',
+				'compatibility_check' => "isModEnabled('agenda') && is_readable(DOL_DOCUMENT_ROOT.'/core/triggers/interface_50_modAgenda_ActionsAuto.class.php')",
+				'available' => $nativeAgenda,
+				'reason' => $nativeAgenda ? '' : 'RequiresNativeAgenda',
 			),
 			'french_address_autocomplete' => array(
 				'label' => 'CompatibilityFeatureFrenchAddressAutocomplete',

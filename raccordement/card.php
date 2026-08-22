@@ -94,8 +94,9 @@ $sensitiveActions = array_merge(array('add', 'update', 'updatefield', 'freeze_sn
 $hasFileMutation = GETPOST('sendit', 'alpha') !== ''
 	|| GETPOST('linkit', 'restricthtml') !== ''
 	|| in_array($action, array('deletefile', 'confirm_deletefile', 'deletelink', 'confirm_updateline', 'renamefile'), true);
+$fileMutationCallback = GETPOSTINT('file_mutation_callback');
 
-if ((in_array($action, $sensitiveActions, true) || $hasFileMutation) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
+if ((in_array($action, $sensitiveActions, true) || $hasFileMutation || $fileMutationCallback > 0) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
@@ -528,9 +529,11 @@ if (isset($statusActions[$action]) && $object->id > 0) {
 	$targetStatus = $statusAction !== '' ? (int) $statusActions[$statusAction]['status'] : (int) $object->status;
 	$object->status = $targetStatus;
 	$targetStatus = $workflow->getReconciledStatus($object);
+	if ($statusAction !== '') {
+		$object->context['agenda_label_key'] = $statusActions[$statusAction]['message'];
+	}
 	$result = $statusAction !== '' ? $object->setStatus($user, $targetStatus) : 0;
 	if ($result > 0) {
-		procedurespvCreateAgendaEvent($object, $user, $statusActions[$statusAction]['message']);
 		setEventMessages($langs->trans($statusActions[$statusAction]['message']), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id);
 		exit;
@@ -552,7 +555,6 @@ if ($action === 'freeze_snapshot' && $object->id > 0) {
 
 	$result = $object->freezeSnapshot($user);
 	if ($result > 0) {
-		procedurespvCreateAgendaEvent($object, $user, 'SnapshotFrozen');
 		setEventMessages($langs->trans('SnapshotFrozen'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/card.php', 1).'?id='.(int) $object->id);
 		exit;
@@ -571,7 +573,25 @@ $upload_dir = '';
 if ((int) $object->id > 0) {
 	$upload_dir = procedurespvGetRaccordementUploadDir($object);
 	if ($upload_dir !== '') {
+		if ($action === 'confirm_deletefile' && GETPOST('confirm', 'alpha') === 'yes' && GETPOST('backtopage', 'alpha') === '') {
+			$backtopage = $_SERVER['PHP_SELF'].'?id='.(int) $object->id.'&file_mutation_callback=1&token='.newToken();
+		}
 		include DOL_DOCUMENT_ROOT.'/core/actions_linkedfiles.inc.php';
+		$fileMutationCompleted = empty($error) && (
+			GETPOST('sendit', 'alpha') !== ''
+			|| GETPOST('linkit', 'restricthtml') !== ''
+			|| ($action === 'confirm_updateline' && GETPOST('save', 'alpha') !== '')
+			|| ($action === 'renamefile' && GETPOST('renamefilesave', 'alpha') !== '')
+		);
+		if ($fileMutationCallback > 0 || $fileMutationCompleted) {
+			if ($object->triggerUserAction($user, 'document_change', array('documents')) < 0) {
+				setEventMessages($object->error, $object->errors, 'errors');
+			}
+			if ($fileMutationCallback > 0) {
+				header('Location: '.$_SERVER['PHP_SELF'].'?id='.(int) $object->id);
+				exit;
+			}
+		}
 	}
 }
 

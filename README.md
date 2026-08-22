@@ -30,6 +30,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Affichage natif des tiers, projets, centrales photovoltaïques et responsables liés via le `getNomUrl()` de leur objet.
 - Lorsque la centrale PV est la source du site, reprise automatique des données disponibles de la centrale dans le raccordement et la collecte, y compris les puissances installée et de raccordement ; les corrections saisies lors du mandat sont répercutées dans le raccordement et dans l’objet Centrale PV natif.
 - Pages indépendantes `Contacts/Adresses`, `Fichiers joints` et `Événements/Agenda`, basées directement sur les actions, gabarits et listes natifs Dolibarr.
+- Événements Agenda natifs configurables pour les créations, modifications et suppressions : chaque action utilisateur renseigne son motif métier dans le contexte du trigger CRUD, tandis que le hook `getElementProperties` résout le raccordement externe sans création manuelle d’`ActionComm`.
 - Badges d’avancement harmonisés avec `dolGetStatus()`, clôture automatique du raccordement et réouverture sur la première étape obligatoire redevenue incomplète.
 - Consuel obligatoire fondé sur la date, la référence et une pièce documentaire native, avec verrouillage serveur de la demande de mise en service tant que le dossier n’est pas conforme.
 - Sélection des modèles de courriels depuis les modèles natifs Dolibarr par type d’objet.

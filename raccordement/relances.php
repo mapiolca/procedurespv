@@ -57,59 +57,6 @@ function procedurespvRelanceReadPayload()
 	);
 }
 
-/**
- * Create a native Agenda event for a sent reminder.
- *
- * @param DoliDB $db Database handler
- * @param User $user User creating the event
- * @param Raccordement $object Raccordement object
- * @param Relance $relance Reminder object
- * @return int Agenda event id, 0 if not created
- */
-function procedurespvRelanceCreateAgendaEvent($db, $user, $object, $relance)
-{
-	global $langs;
-
-	if ((int) $relance->fk_actioncomm > 0) {
-		return (int) $relance->fk_actioncomm;
-	}
-
-	if (!function_exists('isModEnabled') || !isModEnabled('agenda')) {
-		return 0;
-	}
-
-	$actionCommFile = DOL_DOCUMENT_ROOT.'/comm/action/class/actioncomm.class.php';
-	if (!file_exists($actionCommFile)) {
-		return 0;
-	}
-
-	require_once $actionCommFile;
-	if (!class_exists('ActionComm')) {
-		return 0;
-	}
-
-	$typeLabels = Relance::getTypeLabels();
-	$typeKey = isset($typeLabels[(string) $relance->type_relance]) ? $typeLabels[(string) $relance->type_relance] : 'Relance';
-
-	$actioncomm = new ActionComm($db);
-	$actioncomm->type_code = 'AC_OTH_AUTO';
-	$actioncomm->label = $langs->trans('RelanceAgendaEventLabel').' - '.$langs->trans($typeKey).' - '.$object->ref;
-	$actioncomm->datep = dol_now();
-	$actioncomm->datef = dol_now();
-	$actioncomm->percentage = 100;
-	$actioncomm->elementtype = $object->element.'@procedurespv';
-	$actioncomm->fk_element = (int) $object->id;
-	$actioncomm->socid = (int) $object->fk_soc;
-	$actioncomm->note_private = trim((string) $relance->commentaire."\n".(string) $relance->resultat);
-	$result = $actioncomm->create($user);
-	if ($result < 0) {
-		dol_syslog('procedurespvRelanceCreateAgendaEvent failed: '.$actioncomm->error, LOG_WARNING);
-		return 0;
-	}
-
-	return (int) $result;
-}
-
 $langs->loadLangs(array('procedurespv@procedurespv'));
 
 $id = GETPOSTINT('id');
@@ -133,7 +80,7 @@ if (!$permissiontoread) {
 }
 
 $sensitiveActions = array('add_relance', 'update_relance', 'mark_sent', 'mark_canceled');
-if (in_array($action, $sensitiveActions, true) && !GETPOST('token', 'alpha')) {
+if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
 	accessforbidden($langs->trans('ErrorBadToken'));
 }
 
@@ -145,14 +92,20 @@ if ($action === 'add_relance') {
 	$relance = new Relance($db);
 	$payload = procedurespvRelanceReadPayload();
 	$payload['status'] = Relance::STATUS_PLANNED;
+	$db->begin();
 	$result = $relance->create($object, $payload);
+	if ($result > 0 && $object->triggerUserAction($user, 'relance_created', array('relances'), (string) $payload['type_relance']) < 0) {
+		$result = -1;
+	}
 	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans('RelanceCreated'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/relances.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($relance->error, $relance->errors, 'errors');
+	$db->rollback();
+	setEventMessages($object->error !== '' ? $object->error : $relance->error, !empty($object->errors) ? $object->errors : $relance->errors, 'errors');
 }
 
 if ($action === 'update_relance') {
@@ -164,14 +117,20 @@ if ($action === 'update_relance') {
 
 	$payload = procedurespvRelanceReadPayload();
 	$payload['status'] = (int) $relance->status;
+	$db->begin();
 	$result = $relance->update($payload);
+	if ($result > 0 && $object->triggerUserAction($user, 'relance_updated', array('relances'), (string) $payload['type_relance']) < 0) {
+		$result = -1;
+	}
 	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans('RecordSaved'), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/relances.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($relance->error, $relance->errors, 'errors');
+	$db->rollback();
+	setEventMessages($object->error !== '' ? $object->error : $relance->error, !empty($object->errors) ? $object->errors : $relance->errors, 'errors');
 }
 
 if ($action === 'mark_sent' || $action === 'mark_canceled') {
@@ -181,22 +140,32 @@ if ($action === 'mark_sent' || $action === 'mark_canceled') {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
 	}
 
+	$db->begin();
 	if ($action === 'mark_sent') {
-		$fkActioncomm = procedurespvRelanceCreateAgendaEvent($db, $user, $object, $relance);
-		$result = $relance->markSent($fkActioncomm);
+		$result = $relance->markSent(0);
 		$messageKey = 'RelanceMarkedSent';
 	} else {
 		$result = $relance->markCanceled();
 		$messageKey = 'RelanceCanceled';
 	}
+	if ($result > 0 && $object->triggerUserAction(
+		$user,
+		$action === 'mark_sent' ? 'relance_sent' : 'relance_canceled',
+		array('relances'),
+		(string) $relance->type_relance
+	) < 0) {
+		$result = -1;
+	}
 
 	if ($result > 0) {
+		$db->commit();
 		setEventMessages($langs->trans($messageKey), null, 'mesgs');
 		header('Location: '.dol_buildpath('/procedurespv/raccordement/relances.php', 1).'?id='.(int) $object->id);
 		exit;
 	}
 
-	setEventMessages($relance->error, $relance->errors, 'errors');
+	$db->rollback();
+	setEventMessages($object->error !== '' ? $object->error : $relance->error, !empty($object->errors) ? $object->errors : $relance->errors, 'errors');
 }
 
 $form = new Form($db);

@@ -111,6 +111,45 @@ class ActionsProceduresPV
 	}
 
 	/**
+	 * Return the native Agenda trigger rows exposed by the raccordement aggregate.
+	 *
+	 * Business transitions are deliberately carried by the object context. The
+	 * trigger codes remain limited to CRUD so the native Agenda module remains
+	 * the single ActionComm creation path.
+	 *
+	 * @return array<int,array{elementtype:string,code:string,contexts:string,label:string,description:string,rang:int}>
+	 */
+	public static function getNativeAgendaTriggerRows()
+	{
+		return array(
+			array(
+				'elementtype' => 'procedurespv_raccordement@procedurespv',
+				'code' => 'PVPROC_RACCORDEMENT_CREATE',
+				'contexts' => 'agenda',
+				'label' => 'Create a photovoltaic grid connection request',
+				'description' => 'Create a native Agenda event when a grid connection request is created.',
+				'rang' => 45000901,
+			),
+			array(
+				'elementtype' => 'procedurespv_raccordement@procedurespv',
+				'code' => 'PVPROC_RACCORDEMENT_UPDATE',
+				'contexts' => 'agenda',
+				'label' => 'Update a photovoltaic grid connection request',
+				'description' => 'Create a native Agenda event for a user action that updates a grid connection request or one of its related records.',
+				'rang' => 45000902,
+			),
+			array(
+				'elementtype' => 'procedurespv_raccordement@procedurespv',
+				'code' => 'PVPROC_RACCORDEMENT_DELETE',
+				'contexts' => 'agenda',
+				'label' => 'Delete a photovoltaic grid connection request',
+				'description' => 'Create a native Agenda event when a grid connection request is deleted.',
+				'rang' => 45000903,
+			),
+		);
+	}
+
+	/**
 	 * Add Procedures PV entries into the native email templates type list.
 	 *
 	 * @param array<string,mixed> $parameters Hook parameters
@@ -163,6 +202,7 @@ class ActionsProceduresPV
 			'classfile' => 'raccordement',
 			'classname' => 'Raccordement',
 		));
+		$hookmanager->resArray = $this->results;
 
 		return 1;
 	}
