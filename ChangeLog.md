@@ -59,3 +59,4 @@
 - Remplacement des champs texte « Document reçu » et « Document signé » des conventions par des téléversements stockés dans les fichiers joints natifs du raccordement, avec aperçu et téléchargement depuis la convention.
 - Alignement du mandat de représentation sur le modèle FR30-V04 / FOR_RAC_02E : données limitées au modèle, quatre pouvoirs obligatoires dans le formulaire public et mise en page inspirée des attestations PowerPlantPV.
 - Correction de la détection de l’étape active dans la collecte publique : la section cliquée reste sélectionnée pendant le défilement et le seuil d’activation tient compte de la zone réellement visible sous la barre fixe.
+- Remplacement de l’introduction publique du mandat par le texte contractuel, simplification du premier pouvoir et déplacement du détail des documents dans l’infobulle d’information native Dolibarr.

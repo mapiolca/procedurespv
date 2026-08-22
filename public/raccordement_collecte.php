@@ -1468,6 +1468,12 @@ body.page-public-collecte div.fiche {
 	color: #46525f;
 	line-height: 1.5;
 }
+.public-mandate-intro p {
+	margin: 0 0 8px;
+}
+.public-mandate-intro p:last-child {
+	margin-bottom: 0;
+}
 .public-mandate-powers {
 	display: grid;
 	gap: 10px;
@@ -1485,7 +1491,7 @@ body.page-public-collecte div.fiche {
 	background: #f9fbfa;
 	color: #344054;
 	line-height: 1.45;
-	cursor: pointer;
+	cursor: default;
 }
 .public-mandate-power:focus-within {
 	border-color: #0f766e;
@@ -1496,6 +1502,17 @@ body.page-public-collecte div.fiche {
 	height: 18px;
 	margin: 2px 0 0;
 	accent-color: #0f766e;
+}
+.public-mandate-power-content {
+	min-width: 0;
+}
+.public-mandate-power-content label {
+	cursor: pointer;
+}
+.public-mandate-power-help {
+	display: inline-block;
+	margin-left: 6px;
+	white-space: nowrap;
 }
 .public-actions {
 	position: sticky;
@@ -1783,11 +1800,34 @@ print '</section>';
 
 print '<section class="public-section" id="public-section-mandat">';
 print '<div class="public-section-header"><span class="public-step">5</span><h2>'.$langs->trans('PublicSectionMandat').'</h2></div>';
-print '<p class="public-mandate-intro">'.$langs->trans('MandatPublicPowersIntro').'</p>';
+print '<div class="public-mandate-intro">';
+print '<p>'.$langs->trans('MandatEnedisInterlocutorText').'</p>';
+print '<p>'.$langs->trans('MandatEnedisPowersIntro').'</p>';
+print '</div>';
+$mandateDocumentsTooltip = '<ul class="nomargin">';
+foreach (array(
+	'MandatEnedisDocumentPrac',
+	'MandatEnedisDocumentPtf',
+	'MandatEnedisDocumentConnectionAgreement',
+	'MandatEnedisDocumentDirectConnectionAgreement',
+	'MandatEnedisDocumentOperatingAgreement',
+	'MandatEnedisDocumentL3422',
+	'MandatEnedisDocumentAmendment',
+) as $mandateDocumentKey) {
+	$mandateDocumentsTooltip .= '<li>'.dol_escape_htmltag($langs->transnoentitiesnoconv($mandateDocumentKey)).'</li>';
+}
+$mandateDocumentsTooltip .= '</ul><div class="small topspace">'.dol_escape_htmltag($langs->transnoentitiesnoconv('MandatEnedisPowerDocumentsInformation')).'</div>';
 print '<div class="public-mandate-powers">';
 foreach (procedurespvPublicGetMandatePowerDefinitions() as $powerCode => $powerDefinition) {
 	$checked = !empty($formMandatePowers[$powerCode]) ? ' checked' : '';
-	print '<label class="public-mandate-power"><input type="checkbox" name="'.dol_escape_htmltag($powerDefinition['input']).'" value="1" required'.$checked.'><span>'.$langs->trans($powerDefinition['label']).'</span></label>';
+	$inputId = 'public-'.str_replace('_', '-', $powerDefinition['input']);
+	print '<div class="public-mandate-power">';
+	print '<input type="checkbox" id="'.dol_escape_htmltag($inputId).'" name="'.dol_escape_htmltag($powerDefinition['input']).'" value="1" required'.$checked.'>';
+	print '<div class="public-mandate-power-content"><label for="'.dol_escape_htmltag($inputId).'">'.$langs->trans($powerDefinition['label']).'</label>';
+	if ($powerCode === 'sign_contracts') {
+		print $form->textwithpicto('', $mandateDocumentsTooltip, 1, 'info', 'public-mandate-power-help valignmiddle', 1, 3, 'mandatedocumentsonsmartphone');
+	}
+	print '</div></div>';
 }
 print '</div>';
 print '<table class="public-form-table">';

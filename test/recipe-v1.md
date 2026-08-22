@@ -271,13 +271,14 @@ Résultats attendus : les champs sont de vrais téléversements protégés par d
 ## Scénario 17 - Mandat de représentation FR30-V04
 
 1. Ouvrir un lien public actif et atteindre la section `Mandat ENEDIS`.
-2. Vérifier la présence des quatre pouvoirs du modèle FR30-V04 / FOR_RAC_02E et tenter une soumission finale en laissant au moins une case décochée.
-3. Contourner ensuite la validation HTML du navigateur et refaire la requête avec une case décochée afin de contrôler le refus serveur.
-4. Cocher partiellement les pouvoirs puis utiliser `Enregistrer et signer sur mon mobile` ; rouvrir le même lien et vérifier que les choix provisoires sont restaurés sans soumission.
-5. Renseigner le nom et la commune de signature, cocher les quatre pouvoirs, signer puis soumettre la collecte.
-6. Télécharger le mandat généré et vérifier qu’il contient exactement les données du modèle : identité et adresse des parties, quatre pouvoirs, clauses du mandat, adresse et nature du site, lieux, dates, signatures et tampon éventuel.
-7. Vérifier que l’email, le téléphone, la fonction du signataire, le PRM/PDL, les puissances, le type d’exploitation, l’adresse IP et l’agent utilisateur ne figurent pas dans le PDF.
-8. Répéter la génération pour une société puis une collectivité ou administration et vérifier les cases de statut correspondantes ainsi que la mise en page sur deux pages.
+2. Vérifier la présence du texte contractuel introductif et des quatre pouvoirs du modèle FR30-V04 / FOR_RAC_02E, puis ouvrir l’infobulle `i` du premier pouvoir et contrôler la liste complète des documents contractuels.
+3. Tenter une soumission finale en laissant au moins une case décochée.
+4. Contourner ensuite la validation HTML du navigateur et refaire la requête avec une case décochée afin de contrôler le refus serveur.
+5. Cocher partiellement les pouvoirs puis utiliser `Enregistrer et signer sur mon mobile` ; rouvrir le même lien et vérifier que les choix provisoires sont restaurés sans soumission.
+6. Renseigner le nom et la commune de signature, cocher les quatre pouvoirs, signer puis soumettre la collecte.
+7. Télécharger le mandat généré et vérifier qu’il contient exactement les données du modèle : identité et adresse des parties, quatre pouvoirs, clauses du mandat, adresse et nature du site, lieux, dates, signatures et tampon éventuel.
+8. Vérifier que l’email, le téléphone, la fonction du signataire, le PRM/PDL, les puissances, le type d’exploitation, l’adresse IP et l’agent utilisateur ne figurent pas dans le PDF.
+9. Répéter la génération pour une société puis une collectivité ou administration et vérifier les cases de statut correspondantes ainsi que la mise en page sur deux pages.
 
 Résultats attendus : la soumission finale est impossible tant que les quatre pouvoirs ne sont pas cochés, y compris en contournant le navigateur ; la sauvegarde provisoire reste possible ; le mandat PDF reprend uniquement le contenu du modèle fourni et le format graphique des attestations PowerPlantPV, sans chevauchement ni troisième page.
 
