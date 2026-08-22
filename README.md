@@ -17,7 +17,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 - Sauvegarde provisoire de la collecte avant signature, avec reprise du même lien sur mobile sans soumettre le dossier.
 - Dépôt public de pièces avec contrôle taille, extension et MIME.
 - Signature simple du mandat ENEDIS, génération PDF et hash SHA-256.
-- Mandat ENEDIS structuré d’après Enedis-MOP-RAC_046E, avec téléchargement public après soumission et tampon entreprise configurable.
+- Mandat de représentation ENEDIS conforme au modèle FR30-V04 / FOR_RAC_02E, limité aux données du modèle, avec quatre pouvoirs obligatoires, téléchargement public après soumission et tampon entreprise configurable.
 - Collecte publique entreprise enrichie selon la fiche DDR ENEDIS : société, représentant, site, raccordement existant et pièces obligatoires, avec CARD conditionnelle.
 - Révisions de collecte conservant les données soumises, le mandat et les pièces justificatives associés.
 - Workflow de contrôle des pièces (`En attente`, `Facultatif`, `Manquant`, `À contrôler`, `Valide`, `Invalide`) avec dépôt interne, aperçu, téléchargement, validation et refus.
@@ -42,7 +42,7 @@ Compatibilité annoncée : Dolibarr v20+ et PHP 8.0+.
 
 1. Créer un raccordement depuis la liste ou le menu.
 2. Générer le lien public de collecte client depuis l'onglet Collecte.
-3. Le client complète les informations, téléverse les pièces et signe le mandat ENEDIS.
+3. Le client complète les informations, téléverse les pièces, accepte les quatre pouvoirs du mandat et le signe.
 4. L'équipe contrôle les pièces et le mandat, puis prépare la demande ENEDIS.
 5. Le suivi se poursuit dans les onglets Convention / contrat, Mise en service et Relances, ainsi que dans CARD-i lorsque le seuil de puissance applicable est dépassé.
 

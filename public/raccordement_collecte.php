@@ -360,6 +360,36 @@ function procedurespvPublicGetBeneficiaryStatuses()
 }
 
 /**
+ * Return the four powers granted by the ENEDIS representation mandate.
+ *
+ * These legal choices intentionally use checkboxes in the public form: the
+ * customer must expressly grant every power before the collection is submitted.
+ *
+ * @return array<string,array{input:string,label:string}>
+ */
+function procedurespvPublicGetMandatePowerDefinitions()
+{
+	return array(
+		'sign_contracts' => array(
+			'input' => 'mandate_power_sign_contracts',
+			'label' => 'MandatEnedisPowerSignDocuments',
+		),
+		'pay_connection_costs' => array(
+			'input' => 'mandate_power_pay_connection_costs',
+			'label' => 'MandatEnedisPowerPayConnectionCosts',
+		),
+		'execute_l342_6' => array(
+			'input' => 'mandate_power_execute_l342_6',
+			'label' => 'MandatEnedisPowerExecuteL3426',
+		),
+		'sign_access_contract' => array(
+			'input' => 'mandate_power_sign_access_contract',
+			'label' => 'MandatEnedisPowerSignAccessContract',
+		),
+	);
+}
+
+/**
  * Resolve the internal workflow user used for native Dolibarr writes from a public link.
  *
  * @param DoliDB $db Database handler
@@ -600,9 +630,11 @@ $formNoRelatedProjectAttestation = $isCollecteFormPost ? GETPOST('no_related_pro
 $formRelatedProjectReferences = $isCollecteFormPost ? GETPOST('related_project_references', 'restricthtml') : '';
 $formEnedisRequestType = $isCollecteFormPost ? GETPOST('enedis_request_type', 'alphanohtml') : 'enedis_full';
 $formSignataireNom = $isCollecteFormPost ? GETPOST('signataire_nom', 'restricthtml') : '';
-$formSignataireFonction = $isCollecteFormPost ? GETPOST('signataire_fonction', 'restricthtml') : '';
-$formSignataireEmail = $isCollecteFormPost ? GETPOST('signataire_email', 'restricthtml') : (string) $publicLink->email_destinataire;
-$formMandatAcceptance = $isCollecteFormPost ? GETPOST('mandat_acceptance', 'alphanohtml') : 'no';
+$formMandateSignatureTown = $isCollecteFormPost ? GETPOST('mandate_signature_town', 'restricthtml') : '';
+$formMandatePowers = array();
+foreach (procedurespvPublicGetMandatePowerDefinitions() as $powerCode => $powerDefinition) {
+	$formMandatePowers[$powerCode] = $isCollecteFormPost ? GETPOSTINT($powerDefinition['input']) : 0;
+}
 
 $currentPayloadIsMobileDraft = false;
 
@@ -672,10 +704,19 @@ if (!$isCollecteFormPost) {
 		$formRelatedProjectReferences = (string) ($productionPayload['related_project_references'] ?? '');
 		$formEnedisRequestType = (string) ($productionPayload['enedis_request_type'] ?? $formEnedisRequestType);
 		$formSignataireNom = (string) ($mandatePayload['signer_name'] ?? $formSignataireNom);
-		$formSignataireFonction = (string) ($mandatePayload['signer_function'] ?? $formSignataireFonction);
-		$formSignataireEmail = (string) ($mandatePayload['signer_email'] ?? $formSignataireEmail);
-		$formMandatAcceptance = (string) ($mandatePayload['acceptance'] ?? $formMandatAcceptance);
+		$formMandateSignatureTown = (string) ($mandatePayload['signature_town'] ?? $formMandateSignatureTown);
+		$mandatePowersPayload = isset($mandatePayload['powers']) && is_array($mandatePayload['powers']) ? $mandatePayload['powers'] : array();
+		foreach (procedurespvPublicGetMandatePowerDefinitions() as $powerCode => $powerDefinition) {
+			$formMandatePowers[$powerCode] = !empty($mandatePowersPayload[$powerCode]) ? 1 : 0;
+		}
 	}
+}
+
+if ($formSignataireNom === '') {
+	$formSignataireNom = trim($formRepresentativeFirstname.' '.$formRepresentativeLastname);
+}
+if ($formMandateSignatureTown === '') {
+	$formMandateSignatureTown = $formHeadquartersTown;
 }
 
 // A Centrale selected as site source remains authoritative over an older collection revision.
@@ -767,9 +808,10 @@ if ($linkUsable && in_array($action, array('save_for_mobile', 'submit_collecte')
 	$relatedProjectReferences = $formRelatedProjectReferences;
 	$enedisRequestType = $formEnedisRequestType;
 	$signataireNom = $formSignataireNom;
-	$signataireFonction = $formSignataireFonction;
-	$signataireEmail = $formSignataireEmail;
-	$mandatAcceptance = $formMandatAcceptance;
+	$signataireFonction = $representativeFunction;
+	$signataireEmail = $clientEmail;
+	$mandateSignatureTown = $formMandateSignatureTown;
+	$mandatePowers = $formMandatePowers;
 	$signatureDataUrl = GETPOST('signature_data_url', 'restricthtml');
 	$uploadErrors = array();
 	$uploadedPieceIds = array();
@@ -805,10 +847,6 @@ if ($linkUsable && in_array($action, array('save_for_mobile', 'submit_collecte')
 	if ($signataireNom === '' && trim($representativeFirstname.' '.$representativeLastname) !== '') {
 		$signataireNom = trim($representativeFirstname.' '.$representativeLastname);
 	}
-	if ($signataireFonction === '' && $representativeFunction !== '') {
-		$signataireFonction = $representativeFunction;
-	}
-
 	$publicSummary = array(
 		'beneficiary_status' => $clientType,
 		'client_type' => $clientType,
@@ -871,9 +909,8 @@ if ($linkUsable && in_array($action, array('save_for_mobile', 'submit_collecte')
 		),
 		'mandate' => array(
 			'signer_name' => $signataireNom,
-			'signer_function' => $signataireFonction,
-			'signer_email' => $signataireEmail,
-			'acceptance' => $mandatAcceptance,
+			'signature_town' => $mandateSignatureTown,
+			'powers' => $mandatePowers,
 		),
 		'uploaded_piece_ids' => $uploadedPieceIds,
 	);
@@ -961,8 +998,6 @@ if ($linkUsable && $action === 'submit_collecte') {
 			'company_insee_code' => array($companyInseeCode, 'CompanyInseeCode'),
 			'company_capital' => array($companyCapital, 'CompanyCapital'),
 			'company_legal_form' => array($companyLegalForm, 'CompanyLegalForm'),
-			'signataire_fonction' => array($signataireFonction, 'SignerFunction'),
-			'signataire_email' => array($signataireEmail, 'SignerEmail'),
 			'producer_is_building_owner' => array($producerIsBuildingOwner, 'ProducerIsBuildingOwner'),
 			'building_already_built' => array($buildingAlreadyBuilt, 'BuildingAlreadyBuilt'),
 			'site_name' => array($siteName, 'SiteName'),
@@ -1006,10 +1041,13 @@ if ($linkUsable && $action === 'submit_collecte') {
 	if ($clientSiret !== '' && !preg_match('/^\d{14}$/', $clientSiret)) {
 		$uploadErrors[] = $langs->trans('BeneficiarySiretInvalid');
 	}
-	if ($mandatAcceptance !== 'yes') {
-		$uploadErrors[] = $langs->trans('MandatAcceptanceRequired');
+	foreach (procedurespvPublicGetMandatePowerDefinitions() as $powerCode => $powerDefinition) {
+		if (empty($mandatePowers[$powerCode])) {
+			$uploadErrors[] = $langs->trans('MandatAllPowersRequired');
+			break;
+		}
 	}
-	if ($signataireNom === '' || $signataireEmail === '') {
+	if ($signataireNom === '' || $mandateSignatureTown === '') {
 		$uploadErrors[] = $langs->trans('MandatSignerRequired');
 	}
 	if (strpos($signatureDataUrl, 'data:image/png;base64,') !== 0 || strlen($signatureDataUrl) > 1200000) {
@@ -1042,14 +1080,15 @@ if ($linkUsable && $action === 'submit_collecte') {
 				'client_type' => $clientType,
 				'client_name' => $clientName,
 				'client_siret' => $clientSiret,
-				'client_email' => $clientEmail,
-				'client_phone' => $clientPhone,
+				'mandant_representative' => trim($beneficiaryCivility.' '.$representativeFirstname.' '.$representativeLastname),
+				'mandant_address' => implode(', ', array_filter(array($headquartersAddress, $beneficiaryAddressComplement, trim($headquartersZip.' '.$headquartersTown)))),
 				'signataire_nom' => $signataireNom,
-				'signataire_fonction' => $signataireFonction,
-				'signataire_email' => $signataireEmail,
+				'signature_town' => $mandateSignatureTown,
+				'mandate_power_sign_contracts' => (int) $mandatePowers['sign_contracts'],
+				'mandate_power_pay_connection_costs' => (int) $mandatePowers['pay_connection_costs'],
+				'mandate_power_execute_l342_6' => (int) $mandatePowers['execute_l342_6'],
+				'mandate_power_sign_access_contract' => (int) $mandatePowers['sign_access_contract'],
 				'signature_data_url' => $signatureDataUrl,
-				'signature_ip' => $ip,
-				'signature_user_agent' => $userAgent,
 			));
 			if ($pdfFilename === '') {
 				$pdfModelProperties = get_object_vars($pdfModel);
@@ -1424,6 +1463,40 @@ body.page-public-collecte div.fiche {
 	touch-action: none;
 	box-shadow: inset 0 1px 3px rgba(16, 24, 40, 0.08);
 }
+.public-mandate-intro {
+	margin: 0 0 14px;
+	color: #46525f;
+	line-height: 1.5;
+}
+.public-mandate-powers {
+	display: grid;
+	gap: 10px;
+	max-width: 780px;
+	margin-bottom: 18px;
+}
+.public-mandate-power {
+	display: grid;
+	grid-template-columns: 22px 1fr;
+	gap: 10px;
+	align-items: start;
+	padding: 12px 14px;
+	border: 1px solid #d4dfdc;
+	border-radius: 8px;
+	background: #f9fbfa;
+	color: #344054;
+	line-height: 1.45;
+	cursor: pointer;
+}
+.public-mandate-power:focus-within {
+	border-color: #0f766e;
+	box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+.public-mandate-power input[type="checkbox"] {
+	width: 18px;
+	height: 18px;
+	margin: 2px 0 0;
+	accent-color: #0f766e;
+}
 .public-actions {
 	position: sticky;
 	bottom: 0;
@@ -1710,11 +1783,16 @@ print '</section>';
 
 print '<section class="public-section" id="public-section-mandat">';
 print '<div class="public-section-header"><span class="public-step">5</span><h2>'.$langs->trans('PublicSectionMandat').'</h2></div>';
+print '<p class="public-mandate-intro">'.$langs->trans('MandatPublicPowersIntro').'</p>';
+print '<div class="public-mandate-powers">';
+foreach (procedurespvPublicGetMandatePowerDefinitions() as $powerCode => $powerDefinition) {
+	$checked = !empty($formMandatePowers[$powerCode]) ? ' checked' : '';
+	print '<label class="public-mandate-power"><input type="checkbox" name="'.dol_escape_htmltag($powerDefinition['input']).'" value="1" required'.$checked.'><span>'.$langs->trans($powerDefinition['label']).'</span></label>';
+}
+print '</div>';
 print '<table class="public-form-table">';
-print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" id="signataire_nom" autocomplete="name" value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerFunction').'</td><td><input type="text" class="flat minwidth300" name="signataire_fonction" id="signataire_fonction" data-company-required="1" value="'.dol_escape_htmltag($formSignataireFonction).'"></td></tr>';
-print '<tr><td>'.$langs->trans('SignerEmail').'</td><td><input type="email" class="flat minwidth300" name="signataire_email" id="signataire_email" autocomplete="email" data-company-required="1" value="'.dol_escape_htmltag($formSignataireEmail).'"></td></tr>';
-print '<tr><td>'.$langs->trans('MandatAcceptance').'</td><td><select class="flat minwidth300" name="mandat_acceptance" id="mandat_acceptance"><option value="no"'.($formMandatAcceptance === 'no' ? ' selected' : '').'>'.$langs->trans('No').'</option><option value="yes"'.($formMandatAcceptance === 'yes' ? ' selected' : '').'>'.$langs->trans('Yes').'</option></select>'.ajax_combobox('mandat_acceptance').'</td></tr>';
+print '<tr><td class="titlefield">'.$langs->trans('SignerName').'</td><td><input type="text" class="flat minwidth300" name="signataire_nom" id="signataire_nom" autocomplete="name" required value="'.dol_escape_htmltag($formSignataireNom).'"></td></tr>';
+print '<tr><td>'.$langs->trans('MandatSignatureTown').'</td><td><input type="text" class="flat minwidth300" name="mandate_signature_town" autocomplete="address-level2" required value="'.dol_escape_htmltag($formMandateSignatureTown).'"></td></tr>';
 print '<tr><td>'.$langs->trans('Signature').'</td><td>';
 print '<canvas class="public-signature-pad" id="mandat-signature-pad" width="620" height="190"></canvas>';
 print '<input type="hidden" name="signature_data_url" id="signature_data_url">';
@@ -1736,7 +1814,6 @@ print '<script>
 	var organizationNameLabel = document.getElementById("beneficiary_organization_name_label");
 	var representativeFunctionLabel = document.getElementById("beneficiary_representative_function_label");
 	var signerName = document.getElementById("signataire_nom");
-	var signerFunction = document.getElementById("signataire_fonction");
 	var producerIsBuildingOwner = document.getElementById("producer_is_building_owner");
 	var siteAlreadyConnected = document.getElementById("site_already_connected");
 	var pdlChoice = document.getElementById("pdl_choice");
@@ -1755,10 +1832,6 @@ print '<script>
 		if (representativeFirstname && representativeFirstname.value) fullname += representativeFirstname.value.trim();
 		if (representativeLastname && representativeLastname.value) fullname += (fullname ? " " : "") + representativeLastname.value.trim();
 		if (fullname) signerName.value = fullname;
-	}
-	function syncSignerFunction() {
-		if (!representativeFunction || !signerFunction || signerFunction.dataset.userEdited === "1") return;
-		signerFunction.value = representativeFunction.value.trim();
 	}
 	function refreshPublicForm() {
 		if (!clientType) return;
@@ -1808,7 +1881,6 @@ print '<script>
 			representativeFunctionLabel.textContent = isPublicEntity ? representativeFunctionLabel.dataset.publicLabel : representativeFunctionLabel.dataset.companyLabel;
 		}
 		syncSignerName();
-		syncSignerFunction();
 	}
 	function bindDynamicSelect(field) {
 		if (!field) return;
@@ -1823,19 +1895,10 @@ print '<script>
 			syncSignerName();
 		});
 	});
-	if (representativeFunction) {
-		representativeFunction.addEventListener("input", syncSignerFunction);
-	}
 	if (signerName) {
 		if (signerName.value.trim() !== "") signerName.dataset.userEdited = "1";
 		signerName.addEventListener("input", function () {
 			signerName.dataset.userEdited = "1";
-		});
-	}
-	if (signerFunction) {
-		if (signerFunction.value.trim() !== "") signerFunction.dataset.userEdited = "1";
-		signerFunction.addEventListener("input", function () {
-			signerFunction.dataset.userEdited = "1";
 		});
 	}
 	[siretInput, productionSiretInput].forEach(function (field) {
@@ -2017,7 +2080,6 @@ print '<script>
 				if (contact.email) setFieldValue("client_email", contact.email);
 				if (contact.phone) setFieldValue("client_phone", contact.phone);
 				syncSignerName();
-				syncSignerFunction();
 			});
 	}
 	if (siretInput) siretInput.addEventListener("blur", prefillBeneficiaryFromSiret);

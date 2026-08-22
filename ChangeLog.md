@@ -57,3 +57,4 @@
 - Extension de la synchronisation Centrale PV aux puissances installée et de raccordement, et remplacement du libellé « Puissance injectée » par « Puissance du raccordement ».
 - Ajout d’une sauvegarde provisoire « Enregistrer et signer sur mon mobile » conservant les données et pièces de la collecte sans la soumettre, avec reprise du même lien pour signer sur mobile ou sur l’appareil courant.
 - Remplacement des champs texte « Document reçu » et « Document signé » des conventions par des téléversements stockés dans les fichiers joints natifs du raccordement, avec aperçu et téléchargement depuis la convention.
+- Alignement du mandat de représentation sur le modèle FR30-V04 / FOR_RAC_02E : données limitées au modèle, quatre pouvoirs obligatoires dans le formulaire public et mise en page inspirée des attestations PowerPlantPV.

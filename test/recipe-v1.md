@@ -248,7 +248,7 @@ Résultats attendus : le seuil est strictement supérieur à `36 kVA`, les deux 
 1. Ouvrir un lien public actif sur un ordinateur, renseigner partiellement la collecte et sélectionner une ou plusieurs pièces.
 2. Cliquer sur `Enregistrer et signer sur mon mobile` sans compléter les champs obligatoires et sans dessiner de signature.
 3. Vérifier que la page confirme l’enregistrement, que la collecte reste non soumise et que le bouton de soumission finale demeure disponible.
-4. Rouvrir exactement le même lien sur un mobile et contrôler le préremplissage des champs, des informations du signataire et de l’acceptation du mandat.
+4. Rouvrir exactement le même lien sur un mobile et contrôler le préremplissage des champs, du nom et de la commune de signature ainsi que des quatre pouvoirs du mandat déjà cochés.
 5. Vérifier que les pièces téléversées lors de la sauvegarde restent rattachées à la révision courante.
 6. Signer puis soumettre depuis le mobile et vérifier le workflow habituel.
 7. Refaire le scénario en continuant directement sur l’ordinateur après la sauvegarde, sans changer d’appareil.
@@ -267,3 +267,16 @@ Résultats attendus : la sauvegarde provisoire n’appelle ni `markSubmitted()`,
 8. Tester un fichier trop volumineux et une extension interdite, puis vérifier que la convention n’est pas enregistrée et qu’aucun fichier partiel ne subsiste.
 
 Résultats attendus : les champs sont de vrais téléversements protégés par droit et token CSRF, les noms enregistrés correspondent aux fichiers du répertoire documentaire natif du raccordement, la synthèse et l’onglet `Fichiers joints` les affichent sans duplication de stockage, et un échec annule les écritures métier ainsi que les nouveaux fichiers de la tentative.
+
+## Scénario 17 - Mandat de représentation FR30-V04
+
+1. Ouvrir un lien public actif et atteindre la section `Mandat ENEDIS`.
+2. Vérifier la présence des quatre pouvoirs du modèle FR30-V04 / FOR_RAC_02E et tenter une soumission finale en laissant au moins une case décochée.
+3. Contourner ensuite la validation HTML du navigateur et refaire la requête avec une case décochée afin de contrôler le refus serveur.
+4. Cocher partiellement les pouvoirs puis utiliser `Enregistrer et signer sur mon mobile` ; rouvrir le même lien et vérifier que les choix provisoires sont restaurés sans soumission.
+5. Renseigner le nom et la commune de signature, cocher les quatre pouvoirs, signer puis soumettre la collecte.
+6. Télécharger le mandat généré et vérifier qu’il contient exactement les données du modèle : identité et adresse des parties, quatre pouvoirs, clauses du mandat, adresse et nature du site, lieux, dates, signatures et tampon éventuel.
+7. Vérifier que l’email, le téléphone, la fonction du signataire, le PRM/PDL, les puissances, le type d’exploitation, l’adresse IP et l’agent utilisateur ne figurent pas dans le PDF.
+8. Répéter la génération pour une société puis une collectivité ou administration et vérifier les cases de statut correspondantes ainsi que la mise en page sur deux pages.
+
+Résultats attendus : la soumission finale est impossible tant que les quatre pouvoirs ne sont pas cochés, y compris en contournant le navigateur ; la sauvegarde provisoire reste possible ; le mandat PDF reprend uniquement le contenu du modèle fourni et le format graphique des attestations PowerPlantPV, sans chevauchement ni troisième page.
