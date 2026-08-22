@@ -280,3 +280,13 @@ Résultats attendus : les champs sont de vrais téléversements protégés par d
 8. Répéter la génération pour une société puis une collectivité ou administration et vérifier les cases de statut correspondantes ainsi que la mise en page sur deux pages.
 
 Résultats attendus : la soumission finale est impossible tant que les quatre pouvoirs ne sont pas cochés, y compris en contournant le navigateur ; la sauvegarde provisoire reste possible ; le mandat PDF reprend uniquement le contenu du modèle fourni et le format graphique des attestations PowerPlantPV, sans chevauchement ni troisième page.
+
+## Scénario 18 - Détection de la section active
+
+1. Ouvrir une collecte publique en haut de page et cliquer successivement sur chacune des cinq étapes de la barre fixe.
+2. Vérifier dès le clic que l’étape demandée devient active et le reste pendant le défilement vers sa section.
+3. Contrôler qu’une petite portion encore visible de la section précédente ne réactive pas son onglet.
+4. Faire défiler manuellement la page vers le bas puis vers le haut et vérifier que l’étape active change lorsque la section suivante entre dans la zone supérieure du contenu visible.
+5. Refaire le test avec une fenêtre basse puis sur mobile, lorsque la barre d’étapes défile horizontalement.
+
+Résultats attendus : l’étape active correspond à la section principale affichée sous la barre fixe ; un clic n’entraîne aucun retour visuel temporaire vers l’étape précédente et la détection reste cohérente lors d’un défilement manuel dans les deux sens.

@@ -2091,6 +2091,8 @@ print '<script>
 		return sectionId ? document.querySelector(sectionId) : null;
 	});
 	var stepsCssTarget = stepsNav ? stepsNav.closest(".public-procedurespv") : null;
+	var pendingStepIndex = -1;
+	var pendingStepTimer = null;
 	function setActiveStep(activeIndex) {
 		stepLinks.forEach(function (link, index) {
 			if (index === activeIndex) {
@@ -2108,14 +2110,21 @@ print '<script>
 	}
 	function refreshActiveStep() {
 		if (!stepsNav || stepSections.length === 0) return;
-		var readingLine = stepsNav.getBoundingClientRect().bottom + 18;
+		var stepsRect = stepsNav.getBoundingClientRect();
+		var visibleContentHeight = Math.max(0, window.innerHeight - stepsRect.bottom);
+		var activationOffset = Math.min(120, Math.max(48, visibleContentHeight * 0.12));
+		var readingLine = stepsRect.bottom + activationOffset;
 		var activeIndex = 0;
+		stepsNav.classList.toggle("is-stuck", stepsRect.top <= 0 && window.pageYOffset > 0);
+		if (pendingStepIndex >= 0) {
+			setActiveStep(pendingStepIndex);
+			return;
+		}
 		stepSections.forEach(function (section, index) {
 			if (section && section.getBoundingClientRect().top <= readingLine) {
 				activeIndex = index;
 			}
 		});
-		stepsNav.classList.toggle("is-stuck", stepsNav.getBoundingClientRect().top <= 0 && window.pageYOffset > 0);
 		setActiveStep(activeIndex);
 	}
 	function refreshStepsState() {
@@ -2123,9 +2132,18 @@ print '<script>
 		refreshActiveStep();
 	}
 	refreshStepsState();
-	stepLinks.forEach(function (link) {
+	stepLinks.forEach(function (link, index) {
 		link.addEventListener("click", function () {
-			window.setTimeout(refreshStepsState, 0);
+			pendingStepIndex = index;
+			setActiveStep(index);
+			if (pendingStepTimer !== null) {
+				window.clearTimeout(pendingStepTimer);
+			}
+			pendingStepTimer = window.setTimeout(function () {
+				pendingStepIndex = -1;
+				pendingStepTimer = null;
+				refreshStepsState();
+			}, 700);
 		});
 	});
 	window.addEventListener("scroll", refreshActiveStep, {passive:true});
