@@ -66,3 +66,4 @@
 - Affichage permanent du tableau des conventions et déplacement des formulaires d’ajout et de modification dans une fenêtre modale native Dolibarr.
 - Enregistrement automatique des dates de réception et de signature lors du téléversement des documents correspondants, avec possibilité de saisie manuelle prioritaire.
 - Ajout du titre natif « Pièces à déposer » et rétablissement de l’espacement Dolibarr entre l’historique des liens publics et le tableau des pièces.
+- Affichage effectif des cinq datepickers natifs, avec valeurs vides autorisées dans les modales d’ajout et de modification des conventions.
