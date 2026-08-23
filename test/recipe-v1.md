@@ -171,14 +171,16 @@ Résultats attendus : la synchronisation est atomique, respecte les droits et ne
 ## Scénario 8 - Équipements PowerPlantPV
 
 1. Lier une centrale PowerPlantPV contenant deux modèles d’onduleurs et deux modèles de modules avec des quantités différentes, soumettre la collecte publique, puis valider ses pièces, son mandat et la collecte.
-2. Ouvrir la demande de raccordement et vérifier que ces quatre produits et leurs quantités ont été enregistrés lors de la validation.
-3. Vérifier les puissances unitaires, les totaux de ligne et les agrégats affichés en direct.
-4. Enregistrer et comparer les totaux serveur : somme des quantités, kVA des onduleurs et kWc des modules.
-5. Tester un produit sans puissance avec puis sans les droits de modification PowerPlantPV.
-6. Modifier ensuite le catalogue : l’instantané existant ne change pas ; après suppression/réajout, la valeur actuelle est reprise.
-7. Tester un produit d’une mauvaise catégorie et un produit d’une entité inaccessible.
+2. Ouvrir la demande de raccordement et vérifier que les références, les quantités et les puissances des deux types d’équipements sont recopiées dans les lignes normalisées et dans les six agrégats de la demande.
+3. Vérifier que ces six valeurs sont en lecture seule lorsque `site_source = centralepv`.
+4. Tester un produit PowerPlantPV sans puissance technique : sa référence et sa quantité doivent rester présentes, avec une puissance agrégée nulle pour cette ligne.
+5. Marquer une ancienne ligne comme remplacée dans PowerPlantPV et vérifier qu’elle n’est ni recopiée ni comptée une seconde fois dans les agrégats.
+6. Créer un raccordement avec `site_source = local`, saisir manuellement les six valeurs, enregistrer et recharger la demande.
+7. Vérifier que le passage en source locale supprime les anciennes lignes normalisées PowerPlantPV afin qu’elles ne puissent plus écraser la saisie locale.
+8. Tenter de valider une collecte déclarée avec une centrale source mais sans `fk_centrale_pv`, puis avec PowerPlantPV désactivé.
+9. Rejouer le scénario dans une seconde entité.
 
-Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, les caractéristiques manquantes sont corrigées uniquement via les API PowerPlantPV et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
+Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, la source pilote strictement la lecture seule ou la saisie manuelle, les incohérences de liaison bloquent la validation avec un message explicite et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
 
 ## Scénario 9 - Documents, Agenda et Multicompany
 

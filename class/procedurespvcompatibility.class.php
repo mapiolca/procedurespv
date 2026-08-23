@@ -61,21 +61,7 @@ class ProceduresPVCompatibility
 			&& is_readable(DOL_DOCUMENT_ROOT.'/core/triggers/interface_50_modAgenda_ActionsAuto.class.php')
 			&& function_exists('isModEnabled')
 			&& isModEnabled('agenda');
-		$powerPlantPVEquipment = false;
-		if (function_exists('isModEnabled') && isModEnabled('powerplantpv') && function_exists('dol_buildpath')) {
-			$inverterClass = dol_buildpath('/powerplantpv/class/productinverter.class.php', 0);
-			$importClass = dol_buildpath('/powerplantpv/class/powerplantpvproductimport.class.php', 0);
-			if (is_readable($inverterClass) && is_readable($importClass)) {
-				dol_include_once('/powerplantpv/class/productinverter.class.php');
-				dol_include_once('/powerplantpv/class/powerplantpvproductimport.class.php');
-				$powerPlantPVEquipment = class_exists('ProductInverter')
-					&& method_exists('ProductInverter', 'fetchByProduct')
-					&& method_exists('ProductInverter', 'saveForProduct')
-					&& class_exists('PowerPlantPVProductImport')
-					&& method_exists('PowerPlantPVProductImport', 'fetchPvPanel')
-					&& method_exists('PowerPlantPVProductImport', 'importModuleToProduct');
-			}
-		}
+		$powerPlantPVEquipment = isModEnabled('powerplantpv');
 
 		return array(
 			'module_base' => array(
@@ -150,9 +136,9 @@ class ProceduresPVCompatibility
 				'core_available_from' => '20.0.0',
 				'module_available_from' => '20.0.0',
 				'min_php' => '8.0.0',
-				'compatibility_check' => "isModEnabled('powerplantpv') && ProductInverter/PowerPlantPVProductImport APIs are available",
+				'compatibility_check' => "isModEnabled('powerplantpv')",
 				'available' => $powerPlantPVEquipment,
-				'reason' => $powerPlantPVEquipment ? '' : 'RequiresPowerPlantPVEquipmentAPIs',
+				'reason' => $powerPlantPVEquipment ? '' : 'RequiresPowerPlantPVEquipmentModule',
 			),
 		);
 	}

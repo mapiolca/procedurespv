@@ -111,9 +111,10 @@ class RaccordementEquipment
 	 */
 	public function fetchConfirmedPowerPlantLines($raccordement, $type)
 	{
+		$this->error = '';
 		$rows = array();
 		if (
-			!self::isAvailable()
+			!isModEnabled('powerplantpv')
 			|| !is_object($raccordement)
 			|| (string) $raccordement->site_source !== 'centralepv'
 			|| (int) $raccordement->fk_centrale_pv <= 0
@@ -137,13 +138,15 @@ class RaccordementEquipment
 		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'product AS p ON p.rowid = pc.fk_product';
 		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'product_extrafields AS pe ON pe.fk_object = p.rowid';
 		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'c_powerplantpv_categorypv AS category ON category.rowid = pe.categorie_photovoltaique';
-		$sql .= ' LEFT JOIN (SELECT fk_product, entity, MAX('.$powerField.') AS '.$powerField;
-		$sql .= ' FROM '.MAIN_DB_PREFIX.$technicalTable.' WHERE entity IN ('.$productEntities.')';
-		$sql .= ' GROUP BY fk_product, entity) AS tech ON tech.fk_product = p.rowid AND tech.entity = p.entity';
+		$sql .= ' LEFT JOIN '.MAIN_DB_PREFIX.$technicalTable.' AS tech ON tech.rowid = (';
+		$sql .= 'SELECT technical.rowid FROM '.MAIN_DB_PREFIX.$technicalTable.' AS technical';
+		$sql .= ' WHERE technical.fk_product = p.rowid AND technical.entity IN ('.$productEntities.')';
+		$sql .= ' ORDER BY technical.entity DESC, technical.rowid ASC'.$this->db->plimit(1).')';
 		$sql .= ' WHERE pc.fk_powerplant = '.((int) $raccordement->fk_centrale_pv);
 		$sql .= ' AND pc.entity IN ('.$powerPlantEntities.')';
 		$sql .= ' AND pp.entity IN ('.$powerPlantEntities.')';
 		$sql .= ' AND p.entity IN ('.$productEntities.')';
+		$sql .= ' AND (pc.fk_status IS NULL OR pc.fk_status <> 6)';
 		$sql .= " AND category.active = 1 AND category.code = '".$this->db->escape($category)."'";
 		$sql .= ' GROUP BY pc.entity, pc.fk_product, p.ref, p.label, tech.'.$powerField;
 		$sql .= ' ORDER BY p.ref ASC, pc.fk_product ASC';
@@ -192,15 +195,21 @@ class RaccordementEquipment
 		$this->errors = array();
 		$this->changedFields = array();
 		if (
-			!self::isAvailable()
-			|| !is_object($raccordement)
+			!is_object($raccordement)
 			|| (int) $raccordement->id <= 0
 			|| (string) $raccordement->site_source !== 'centralepv'
-			|| (int) $raccordement->fk_centrale_pv <= 0
 			|| empty($raccordement->date_collecte_soumission)
 			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
 		) {
 			return 0;
+		}
+		if ((int) $raccordement->fk_centrale_pv <= 0) {
+			$this->error = 'LinkedPowerPlantRequiredForEquipmentPrefill';
+			return -1;
+		}
+		if (!isModEnabled('powerplantpv')) {
+			$this->error = 'PowerPlantPVRequiredForEquipmentPrefill';
+			return -1;
 		}
 		if (!is_object($user) || (int) $user->id <= 0) {
 			$this->error = 'NotEnoughPermissions';
@@ -236,13 +245,7 @@ class RaccordementEquipment
 				return -1;
 			}
 		}
-		$invertersToCopy = array_values(array_filter($invertersToCopy, static function ($line) {
-			return isset($line['unit_power']) && (float) $line['unit_power'] > 0;
-		}));
-		$modulesToCopy = array_values(array_filter($modulesToCopy, static function ($line) {
-			return isset($line['unit_power']) && (float) $line['unit_power'] > 0;
-		}));
-		if (empty($invertersToCopy) && empty($modulesToCopy)) {
+		if (!$replaceExisting && empty($invertersToCopy) && empty($modulesToCopy)) {
 			return 0;
 		}
 
@@ -250,20 +253,24 @@ class RaccordementEquipment
 			$this->db->begin();
 		}
 		$inserted = 0;
-		if ($replaceExisting && !empty($invertersToCopy) && $this->deleteLinesByType($raccordement, self::TYPE_INVERTER) < 0) {
+		if ($replaceExisting && $this->deleteLinesByType($raccordement, self::TYPE_INVERTER) < 0) {
 			$inserted = -1;
 		}
 		if ($inserted >= 0) {
 			$inserted = $this->insertConfirmedLines($raccordement, $invertersToCopy, $user);
 		}
-		if ($inserted >= 0 && $replaceExisting && !empty($modulesToCopy) && $this->deleteLinesByType($raccordement, self::TYPE_MODULE) < 0) {
+		if ($inserted >= 0 && $replaceExisting && $this->deleteLinesByType($raccordement, self::TYPE_MODULE) < 0) {
 			$inserted = -1;
 		}
 		if ($inserted >= 0) {
 			$moduleInserted = $this->insertConfirmedLines($raccordement, $modulesToCopy, $user);
 			$inserted = $moduleInserted < 0 ? -1 : $inserted + $moduleInserted;
 		}
-		if ($inserted < 0 || ($inserted > 0 && $this->recalculate($raccordement, $user, true) < 0)) {
+		$recalculated = 0;
+		if ($inserted >= 0 && ($replaceExisting || $inserted > 0)) {
+			$recalculated = $this->recalculate($raccordement, $user, !$replaceExisting);
+		}
+		if ($inserted < 0 || $recalculated < 0) {
 			if ($manageTransaction) {
 				$this->db->rollback();
 			}
@@ -273,7 +280,7 @@ class RaccordementEquipment
 			$this->db->commit();
 		}
 
-		return $inserted > 0 ? 1 : 0;
+		return ($inserted > 0 || $recalculated > 0) ? 1 : 0;
 	}
 
 	/** @param Raccordement $raccordement Parent object @param string $type Equipment type @return int */
@@ -304,7 +311,7 @@ class RaccordementEquipment
 			$type = isset($line['type']) ? (string) $line['type'] : '';
 			$quantity = isset($line['quantity']) ? max(1, (int) $line['quantity']) : 0;
 			$unitPower = isset($line['unit_power']) ? price2num((string) $line['unit_power'], 'MU') : 0;
-			if ($productId <= 0 || $quantity <= 0 || (float) $unitPower <= 0 || !in_array($type, array(self::TYPE_INVERTER, self::TYPE_MODULE), true)) {
+			if ($productId <= 0 || $quantity <= 0 || !in_array($type, array(self::TYPE_INVERTER, self::TYPE_MODULE), true)) {
 				continue;
 			}
 
@@ -321,6 +328,77 @@ class RaccordementEquipment
 		}
 
 		return $inserted;
+	}
+
+	/**
+	 * Save equipment values entered for a raccordement whose site source is local.
+	 *
+	 * Local values replace normalized PowerPlantPV rows so the parent aggregates
+	 * cannot subsequently be overwritten by stale equipment selections.
+	 *
+	 * @param Raccordement $raccordement Parent object
+	 * @param array{onduleurs:string,nombre_onduleurs:int,puissance_onduleurs:string,modules:string,nombre_modules:int,puissance_installee_kwc:string} $values Posted local values
+	 * @param User $user Acting user
+	 * @return int
+	 */
+	public function saveLocalValues($raccordement, array $values, $user)
+	{
+		$this->error = '';
+		$this->errors = array();
+		$this->changedFields = array();
+		if (!is_object($raccordement) || (int) $raccordement->id <= 0 || (string) $raccordement->site_source !== 'local') {
+			$this->error = 'LocalEquipmentEntryRequiresLocalSiteSource';
+			return -1;
+		}
+		if (!is_object($user) || (int) $user->id <= 0) {
+			$this->error = 'NotEnoughPermissions';
+			return -1;
+		}
+
+		$inverters = trim(dol_string_nohtmltag($values['onduleurs']));
+		$inverterCount = max(0, (int) $values['nombre_onduleurs']);
+		$inverterPower = price2num($values['puissance_onduleurs'], 'MU');
+		$modules = trim(dol_string_nohtmltag($values['modules']));
+		$moduleCount = max(0, (int) $values['nombre_modules']);
+		$installedPower = price2num($values['puissance_installee_kwc'], 'MU');
+
+		$this->db->begin();
+		if ($this->deleteLinesByType($raccordement, self::TYPE_INVERTER) < 0
+			|| $this->deleteLinesByType($raccordement, self::TYPE_MODULE) < 0) {
+			$this->db->rollback();
+			return -1;
+		}
+
+		$raccordement->onduleurs = $inverters;
+		$raccordement->references_onduleurs = $inverters;
+		$raccordement->nombre_onduleurs = $inverterCount;
+		$raccordement->puissance_onduleurs = $inverterPower;
+		$raccordement->modules = $modules;
+		$raccordement->nombre_modules = $moduleCount;
+		$raccordement->puissance_installee_kwc = $installedPower;
+		// A local total does not prove that every module has the same nominal power.
+		$raccordement->puissance_unitaire_modules = null;
+		$this->changedFields = array(
+			'onduleurs',
+			'references_onduleurs',
+			'nombre_onduleurs',
+			'puissance_onduleurs',
+			'modules',
+			'nombre_modules',
+			'puissance_unitaire_modules',
+			'puissance_installee_kwc',
+		);
+		$raccordement->context['trigger_reason'] = 'equipment_changed';
+		$raccordement->context['changed_fields'] = $this->changedFields;
+		if ($raccordement->update($user, 1) < 0) {
+			$this->error = $raccordement->error;
+			$this->errors = $raccordement->errors;
+			$this->db->rollback();
+			return -1;
+		}
+
+		$this->db->commit();
+		return 1;
 	}
 
 	/** @param int $fkRaccordement Raccordement id @return bool */

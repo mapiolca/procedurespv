@@ -72,13 +72,15 @@ if (in_array($action, $sensitiveActions, true)) {
 	}
 
 	$equipmentService = new RaccordementEquipment($db);
-	$equipmentSaved = false;
-	$technicalDocumentsUploaded = false;
 	$uploadFailed = false;
-	$selectedInverters = array();
-	$selectedModules = array();
-	$quantities = array();
-	$manualPowers = array();
+	$localEquipmentValues = array(
+		'onduleurs' => (string) $object->onduleurs,
+		'nombre_onduleurs' => (int) $object->nombre_onduleurs,
+		'puissance_onduleurs' => (string) $object->puissance_onduleurs,
+		'modules' => (string) $object->modules,
+		'nombre_modules' => (int) $object->nombre_modules,
+		'puissance_installee_kwc' => (string) $object->puissance_installee_kwc,
+	);
 	if ($action === 'save') {
 		$object->ref_enedis = GETPOST('ref_enedis', 'alphanohtml');
 		$object->date_depot_enedis = procedurespvReadDateTimeFromPost('date_depot_enedis');
@@ -94,20 +96,19 @@ if (in_array($action, $sensitiveActions, true)) {
 				$uploadFailed = true;
 				setEventMessages($langs->trans($upload['error']), null, 'errors');
 			} elseif ($upload['result'] > 0) {
-				$technicalDocumentsUploaded = true;
 				$object->{$field} = $upload['filename'];
 			}
 		}
 
-		if (RaccordementEquipment::isAvailable()) {
-			$postedInverters = GETPOST('inverter_products', 'array');
-			$postedModules = GETPOST('module_products', 'array');
-			$postedQuantities = GETPOST('equipment_qty', 'array');
-			$postedManualPowers = GETPOST('equipment_power', 'array');
-			$selectedInverters = is_array($postedInverters) ? $postedInverters : array();
-			$selectedModules = is_array($postedModules) ? $postedModules : array();
-			$quantities = is_array($postedQuantities) ? $postedQuantities : array();
-			$manualPowers = is_array($postedManualPowers) ? $postedManualPowers : array();
+		if ((string) $object->site_source === 'local') {
+			$localEquipmentValues = array(
+				'onduleurs' => GETPOST('onduleurs', 'restricthtml'),
+				'nombre_onduleurs' => GETPOSTINT('nombre_onduleurs'),
+				'puissance_onduleurs' => GETPOST('puissance_onduleurs', 'alphanohtml'),
+				'modules' => GETPOST('modules', 'restricthtml'),
+				'nombre_modules' => GETPOSTINT('nombre_modules'),
+				'puissance_installee_kwc' => GETPOST('puissance_installee_kwc', 'alphanohtml'),
+			);
 		}
 	}
 
@@ -159,30 +160,27 @@ if (in_array($action, $sensitiveActions, true)) {
 	$object->context['changed_fields'] = array('ref_enedis', 'date_depot_enedis', 'demande_status', 'status');
 	if ($uploadFailed) {
 		$result = -1;
-	} elseif ($action === 'save' && RaccordementEquipment::isAvailable()) {
-		$inverters = array();
-		$modules = array();
-		foreach (is_array($selectedInverters) ? $selectedInverters : array() as $productId) {
-			$productId = (int) $productId;
-			$inverters[$productId] = max(1, (int) ($quantities['inverter'][$productId] ?? 1));
-		}
-		foreach (is_array($selectedModules) ? $selectedModules : array() as $productId) {
-			$productId = (int) $productId;
-			$modules[$productId] = max(1, (int) ($quantities['module'][$productId] ?? 1));
-		}
-		$flatPowers = array();
-		foreach (is_array($manualPowers) ? $manualPowers : array() as $type => $powers) {
-			if (is_array($powers)) {
-				foreach ($powers as $productId => $power) {
-					$flatPowers[$type.'_'.((int) $productId)] = $power;
-				}
-			}
-		}
-		$result = $equipmentService->saveSelections($object, $inverters, $modules, $flatPowers, $user);
-		$equipmentSaved = $result > 0;
+	} elseif ($action === 'save' && (string) $object->site_source === 'local') {
+		$result = $equipmentService->saveLocalValues($object, $localEquipmentValues, $user);
 		if ($result < 0) {
 			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
-		} elseif ($object->triggerUserAction($user, 'equipment_changed', array('equipment')) < 0) {
+		} elseif ($object->triggerUserAction($user, 'enedis_request_update', array_values(array_unique(array_merge(
+			array('ref_enedis', 'date_depot_enedis', 'portail_utilise', 'puissance_raccordement_demandee', 'type_reseau', 'mono_tri_confirme', 'commentaire_technique'),
+			$equipmentService->changedFields
+		)))) < 0) {
+			$result = -1;
+			setEventMessages($object->error, $object->errors, 'errors');
+		}
+	} elseif ($action === 'save' && (string) $object->site_source === 'centralepv' && !empty($object->date_collecte_soumission)) {
+		$result = $equipmentService->prefillFromConfirmedPowerPlant($object, $user, true);
+		if ($result < 0) {
+			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
+		} elseif ($result === 0 && $object->update($user, 1) < 0) {
+			$result = -1;
+		} elseif ($object->triggerUserAction($user, 'enedis_request_update', array_values(array_unique(array_merge(
+			array('ref_enedis', 'date_depot_enedis', 'portail_utilise', 'puissance_raccordement_demandee', 'type_reseau', 'mono_tri_confirme', 'commentaire_technique'),
+			$equipmentService->changedFields
+		)))) < 0) {
 			$result = -1;
 			setEventMessages($object->error, $object->errors, 'errors');
 		}
@@ -195,7 +193,9 @@ if (in_array($action, $sensitiveActions, true)) {
 		exit;
 	}
 
-	setEventMessages($object->error, $object->errors, 'errors');
+	if ($object->error !== '' || !empty($object->errors)) {
+		setEventMessages($object->error, $object->errors, 'errors');
+	}
 }
 
 $form = new Form($db);
@@ -211,9 +211,10 @@ if ($collectionIsValidated) {
 	$centraleAdapter->prefillRaccordementRequestData($object);
 }
 $equipmentService = new RaccordementEquipment($db);
+$usesLinkedPowerPlant = (string) $object->site_source === 'centralepv';
 $inverterLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_INVERTER);
 $moduleLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_MODULE);
-if ($collectionIsValidated && RaccordementEquipment::isAvailable()) {
+if ($collectionIsValidated && $usesLinkedPowerPlant && isModEnabled('powerplantpv')) {
 	$hasHistoricalInverters = trim((string) $object->onduleurs) !== '' || (int) $object->nombre_onduleurs > 0;
 	$hasHistoricalModules = trim((string) $object->modules) !== '' || (int) $object->nombre_modules > 0;
 	if (empty($inverterLines) && !$hasHistoricalInverters) {
@@ -222,6 +223,15 @@ if ($collectionIsValidated && RaccordementEquipment::isAvailable()) {
 	if (empty($moduleLines) && !$hasHistoricalModules) {
 		$moduleLines = $equipmentService->fetchConfirmedPowerPlantLines($object, RaccordementEquipment::TYPE_MODULE);
 	}
+}
+
+$displayInverterNames = trim((string) $object->onduleurs);
+if ($displayInverterNames === '' && !empty($inverterLines)) {
+	$displayInverterLabels = array();
+	foreach ($inverterLines as $inverterLine) {
+		$displayInverterLabels[] = trim((string) $inverterLine['ref'].' - '.(string) $inverterLine['label']).' × '.((int) $inverterLine['quantity']);
+	}
+	$displayInverterNames = implode("\n", $displayInverterLabels);
 }
 
 $displayInverterCount = (int) $object->nombre_onduleurs;
@@ -246,6 +256,14 @@ if (!empty($moduleLines)) {
 		$displayModulePowerWc += (int) $moduleLine['quantity'] * (float) $moduleLine['unit_power'];
 	}
 	$displayInstalledPower = price2num($displayModulePowerWc / 1000, 'MU');
+}
+$displayModuleNames = trim((string) $object->modules);
+if ($displayModuleNames === '' && !empty($moduleLines)) {
+	$displayModuleLabels = array();
+	foreach ($moduleLines as $moduleLine) {
+		$displayModuleLabels[] = trim((string) $moduleLine['ref'].' - '.(string) $moduleLine['label']).' × '.((int) $moduleLine['quantity']);
+	}
+	$displayModuleNames = implode("\n", $displayModuleLabels);
 }
 
 llxHeader('', $langs->trans('DemandeRaccordement'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-demande');
@@ -277,32 +295,20 @@ foreach (array('monophase' => 'NetworkMonophase', 'triphase' => 'NetworkTriphase
 	print '<option value="'.dol_escape_htmltag($value).'"'.($object->mono_tri_confirme === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
 }
 print '</select>'.ajax_combobox('mono_tri_confirme').'</td></tr>';
-if (RaccordementEquipment::isAvailable()) {
-	print '<tr><td>'.$langs->trans('Inverters').'</td><td><select class="flat minwidth500" multiple name="inverter_products[]" id="inverter_products">';
-	foreach ($inverterLines as $line) {
-		print '<option selected value="'.((int) $line['fk_product']).'" data-power="'.dol_escape_htmltag((string) $line['unit_power']).'">'.dol_escape_htmltag(trim($line['ref'].' - '.$line['label'])).'</option>';
-	}
-	print '</select><div id="inverter_quantity_rows" class="equipment-quantity-rows"></div>';
-	if (empty($inverterLines) && trim((string) $object->onduleurs) !== '') {
-		print '<div class="opacitymedium">'.$langs->trans('HistoricalEquipmentValues').' : '.nl2br(dol_escape_htmltag((string) $object->onduleurs)).'</div>';
-	}
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('InverterCount').'</td><td><span id="inverter_count_total">'.$displayInverterCount.'</span></td></tr>';
-	print '<tr><td>'.$langs->trans('InverterPower').'</td><td><span id="inverter_power_total">'.dol_escape_htmltag((string) $displayInverterPower).'</span> kVA</td></tr>';
-	print '<tr><td>'.$langs->trans('Modules').'</td><td><select class="flat minwidth500" multiple name="module_products[]" id="module_products">';
-	foreach ($moduleLines as $line) {
-		print '<option selected value="'.((int) $line['fk_product']).'" data-power="'.dol_escape_htmltag((string) $line['unit_power']).'">'.dol_escape_htmltag(trim($line['ref'].' - '.$line['label'])).'</option>';
-	}
-	print '</select><div id="module_quantity_rows" class="equipment-quantity-rows"></div>';
-	if (empty($moduleLines) && trim((string) $object->modules) !== '') {
-		print '<div class="opacitymedium">'.$langs->trans('HistoricalEquipmentValues').' : '.nl2br(dol_escape_htmltag((string) $object->modules)).'</div>';
-	}
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ModuleCount').'</td><td><span id="module_count_total">'.$displayModuleCount.'</span></td></tr>';
-	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span id="module_power_total">'.dol_escape_htmltag((string) $displayInstalledPower).'</span> kWc</td></tr>';
+if ($usesLinkedPowerPlant) {
+	print '<tr><td>'.$langs->trans('Inverters').'</td><td>'.($displayInverterNames !== '' ? nl2br(dol_escape_htmltag($displayInverterNames)) : '<span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span>').'<br><span class="opacitymedium">'.$langs->trans('EquipmentDerivedFromLinkedPowerPlant').'</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InverterCount').'</td><td>'.$displayInverterCount.'</td></tr>';
+	print '<tr><td>'.$langs->trans('InverterPower').'</td><td>'.dol_escape_htmltag((string) $displayInverterPower).' kVA</td></tr>';
+	print '<tr><td>'.$langs->trans('Modules').'</td><td>'.($displayModuleNames !== '' ? nl2br(dol_escape_htmltag($displayModuleNames)) : '<span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span>').'</td></tr>';
+	print '<tr><td>'.$langs->trans('ModuleCount').'</td><td>'.$displayModuleCount.'</td></tr>';
+	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td>'.dol_escape_htmltag((string) $displayInstalledPower).' kWc</td></tr>';
 } else {
-	print '<tr><td>'.$langs->trans('Inverters').'</td><td>'.nl2br(dol_escape_htmltag((string) $object->onduleurs)).' <span class="opacitymedium">'.$langs->trans('EquipmentManagementUnavailable').'</span></td></tr>';
-	print '<tr><td>'.$langs->trans('Modules').'</td><td>'.nl2br(dol_escape_htmltag((string) $object->modules)).'</td></tr>';
+	print '<tr><td>'.$langs->trans('Inverters').'</td><td><input type="text" class="flat minwidth500" name="onduleurs" value="'.dol_escape_htmltag((string) $object->onduleurs).'"><br><span class="opacitymedium">'.$langs->trans('LocalEquipmentManualEntry').'</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InverterCount').'</td><td><input type="number" min="0" class="flat width100" name="nombre_onduleurs" value="'.((int) $object->nombre_onduleurs).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('InverterPower').'</td><td><input type="text" class="flat width100 right" name="puissance_onduleurs" value="'.dol_escape_htmltag((string) $object->puissance_onduleurs).'"> kVA</td></tr>';
+	print '<tr><td>'.$langs->trans('Modules').'</td><td><input type="text" class="flat minwidth500" name="modules" value="'.dol_escape_htmltag((string) $object->modules).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('ModuleCount').'</td><td><input type="number" min="0" class="flat width100" name="nombre_modules" value="'.((int) $object->nombre_modules).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><input type="text" class="flat width100 right" name="puissance_installee_kwc" value="'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'"> kWc</td></tr>';
 }
 foreach (array('schema_unifilaire' => 'SingleLineDiagram', 'plan_masse' => 'SitePlan', 'plan_cadastral' => 'CadastralPlan', 'bilan_puissance' => 'PowerBalance') as $field => $labelKey) {
 	print '<tr><td>'.$langs->trans($labelKey).'</td><td><input type="file" class="flat" name="'.$field.'">';
@@ -316,13 +322,6 @@ print '</table>';
 
 print '<div class="center"><input type="submit" class="button button-save" value="'.$langs->trans('Save').'"></div>';
 print '</form>';
-
-if (RaccordementEquipment::isAvailable()) {
-	$initialEquipment = array('inverter' => $inverterLines, 'module' => $moduleLines);
-	print '<script>jQuery(function($){var initial='.json_encode($initialEquipment, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).';';
-	print 'function setup(type){var s=$("#"+type+"_products"),values={};(initial[type]||[]).forEach(function(l){values[String(l.fk_product)]={quantity:parseInt(l.quantity||1,10),power:parseFloat(l.unit_power||0)};});s.select2({width:"resolve",ajax:{url:'.json_encode(dol_buildpath('/procedurespv/ajax/products.php', 1)).',dataType:"json",delay:250,data:function(p){return {q:p.term||"",type:type};},processResults:function(d){return d;}},minimumInputLength:0});';
-	print 'function refreshTotals(){var count=0,power=0;s.find("option:selected").each(function(){var id=String($(this).val()),v=values[id]||{quantity:1,power:0},q=Math.max(1,parseInt(v.quantity||1,10)),p=parseFloat(v.power||0);count+=q;power+=q*p;var unit=type==="inverter"?"kVA":"Wc",display=type==="inverter"?p/1000:p,total=type==="inverter"?(q*p/1000).toFixed(3):(q*p).toFixed(0);$("#"+type+"_quantity_rows .equipment-qty[data-id=\""+id+"\"]").siblings(".equipment-power").text(" — "+display+" "+unit+" / "+total+" "+unit);});$("#"+type+"_count_total").text(count);$("#"+type+"_power_total").text((power/1000).toFixed(3));}function render(){var box=$("#"+type+"_quantity_rows").empty();s.find("option:selected").each(function(){var o=$(this),id=String(o.val()),sd=o.data("data")||{},v=values[id]||{quantity:1,power:parseFloat(sd.power||o.data("power")||0)},q=Math.max(1,parseInt(v.quantity||1,10)),p=parseFloat(v.power||0);values[id]=v;var unit=type==="inverter"?"kVA":"Wc";var row=$("<div class=\"equipment-quantity-row\"></div>");row.append($("<label></label>").text('.json_encode($langs->trans('Quantity')).'+" "+o.text()+" : "));row.append($("<input type=\"number\" min=\"1\" class=\"flat width75 equipment-qty\">").attr("name","equipment_qty["+type+"]["+id+"]").attr("data-id",id).val(q));row.append($("<span class=\"equipment-power\"></span>"));if(!p){row.append($("<input type=\"text\" class=\"flat width100 equipment-manual-power\" required>").attr("name","equipment_power["+type+"]["+id+"]").attr("data-id",id).attr("placeholder",unit));}box.append(row);});refreshTotals();}s.on("change",render);$(document).on("input","#"+type+"_quantity_rows .equipment-qty",function(){values[String($(this).data("id"))].quantity=Math.max(1,parseInt($(this).val()||1,10));refreshTotals();});$(document).on("input","#"+type+"_quantity_rows .equipment-manual-power",function(){var raw=parseFloat(String($(this).val()).replace(",","."))||0;values[String($(this).data("id"))].power=type==="inverter"?raw*1000:raw;refreshTotals();});render();}setup("inverter");setup("module");});</script>';
-}
 
 print '<div class="tabsAction">';
 if ($permissiontowrite) {
