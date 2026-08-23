@@ -13,6 +13,7 @@ require_once dol_buildpath('/procedurespv/class/raccordement.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/raccordementworkflow.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
@@ -202,9 +203,45 @@ $pieceFetcher = new Piece($db);
 $pieces = $pieceFetcher->fetchAllByRaccordement((int) $object->id);
 $signature = new Signature($db);
 $signature->fetchLatestForRaccordement((int) $object->id, Signature::TYPE_MANDAT_ENEDIS);
+$centraleAdapter = new CentralePVAdapter($db);
+$centraleAdapter->prefillRaccordementRequestData($object);
 $equipmentService = new RaccordementEquipment($db);
 $inverterLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_INVERTER);
 $moduleLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_MODULE);
+if (RaccordementEquipment::isAvailable()) {
+	$hasHistoricalInverters = trim((string) $object->onduleurs) !== '' || (int) $object->nombre_onduleurs > 0;
+	$hasHistoricalModules = trim((string) $object->modules) !== '' || (int) $object->nombre_modules > 0;
+	if (empty($inverterLines) && !$hasHistoricalInverters) {
+		$inverterLines = $equipmentService->fetchConfirmedPowerPlantLines($object, RaccordementEquipment::TYPE_INVERTER);
+	}
+	if (empty($moduleLines) && !$hasHistoricalModules) {
+		$moduleLines = $equipmentService->fetchConfirmedPowerPlantLines($object, RaccordementEquipment::TYPE_MODULE);
+	}
+}
+
+$displayInverterCount = (int) $object->nombre_onduleurs;
+$displayInverterPower = price2num((string) $object->puissance_onduleurs, 'MU');
+if (!empty($inverterLines)) {
+	$displayInverterCount = 0;
+	$displayInverterPowerVa = 0.0;
+	foreach ($inverterLines as $inverterLine) {
+		$displayInverterCount += (int) $inverterLine['quantity'];
+		$displayInverterPowerVa += (int) $inverterLine['quantity'] * (float) $inverterLine['unit_power'];
+	}
+	$displayInverterPower = price2num($displayInverterPowerVa / 1000, 'MU');
+}
+
+$displayModuleCount = (int) $object->nombre_modules;
+$displayInstalledPower = price2num((string) $object->puissance_installee_kwc, 'MU');
+if (!empty($moduleLines)) {
+	$displayModuleCount = 0;
+	$displayModulePowerWc = 0.0;
+	foreach ($moduleLines as $moduleLine) {
+		$displayModuleCount += (int) $moduleLine['quantity'];
+		$displayModulePowerWc += (int) $moduleLine['quantity'] * (float) $moduleLine['unit_power'];
+	}
+	$displayInstalledPower = price2num($displayModulePowerWc / 1000, 'MU');
+}
 
 llxHeader('', $langs->trans('DemandeRaccordement'), '', '', 0, 0, '', '', '', 'mod-procedurespv page-raccordement-demande');
 
@@ -245,8 +282,8 @@ if (RaccordementEquipment::isAvailable()) {
 		print '<div class="opacitymedium">'.$langs->trans('HistoricalEquipmentValues').' : '.nl2br(dol_escape_htmltag((string) $object->onduleurs)).'</div>';
 	}
 	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('InverterCount').'</td><td><span id="inverter_count_total">'.((int) $object->nombre_onduleurs).'</span></td></tr>';
-	print '<tr><td>'.$langs->trans('InverterPower').'</td><td><span id="inverter_power_total">'.dol_escape_htmltag((string) $object->puissance_onduleurs).'</span> kVA</td></tr>';
+	print '<tr><td>'.$langs->trans('InverterCount').'</td><td><span id="inverter_count_total">'.$displayInverterCount.'</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InverterPower').'</td><td><span id="inverter_power_total">'.dol_escape_htmltag((string) $displayInverterPower).'</span> kVA</td></tr>';
 	print '<tr><td>'.$langs->trans('Modules').'</td><td><select class="flat minwidth500" multiple name="module_products[]" id="module_products">';
 	foreach ($moduleLines as $line) {
 		print '<option selected value="'.((int) $line['fk_product']).'" data-power="'.dol_escape_htmltag((string) $line['unit_power']).'">'.dol_escape_htmltag(trim($line['ref'].' - '.$line['label'])).'</option>';
@@ -256,8 +293,8 @@ if (RaccordementEquipment::isAvailable()) {
 		print '<div class="opacitymedium">'.$langs->trans('HistoricalEquipmentValues').' : '.nl2br(dol_escape_htmltag((string) $object->modules)).'</div>';
 	}
 	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ModuleCount').'</td><td><span id="module_count_total">'.((int) $object->nombre_modules).'</span></td></tr>';
-	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span id="module_power_total">'.dol_escape_htmltag((string) $object->puissance_installee_kwc).'</span> kWc</td></tr>';
+	print '<tr><td>'.$langs->trans('ModuleCount').'</td><td><span id="module_count_total">'.$displayModuleCount.'</span></td></tr>';
+	print '<tr><td>'.$langs->trans('InstalledPowerKwc').'</td><td><span id="module_power_total">'.dol_escape_htmltag((string) $displayInstalledPower).'</span> kWc</td></tr>';
 } else {
 	print '<tr><td>'.$langs->trans('Inverters').'</td><td>'.nl2br(dol_escape_htmltag((string) $object->onduleurs)).' <span class="opacitymedium">'.$langs->trans('EquipmentManagementUnavailable').'</span></td></tr>';
 	print '<tr><td>'.$langs->trans('Modules').'</td><td>'.nl2br(dol_escape_htmltag((string) $object->modules)).'</td></tr>';

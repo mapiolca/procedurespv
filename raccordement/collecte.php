@@ -293,7 +293,7 @@ $historyParam = '&id='.(int) $object->id.'&limit='.(int) $historyLimit;
 print '<br><form method="GET" id="public-link-history-form" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
 print '<input type="hidden" name="id" value="'.(int) $object->id.'">';
 print_barre_liste($langs->trans('PublicLinkHistory'), $historyPage, $_SERVER['PHP_SELF'], $historyParam, '', '', '', $historyNum, $historyTotal, 'link', 0, '', '', $historyLimit, 0, 0, 0);
-print '<div class="div-table-responsive"><table class="tagtable nobottomiftotal liste centpercent">';
+print '<div class="div-table-responsive-no-min"><table class="tagtable nobottomiftotal liste centpercent">';
 print '<thead><tr class="liste_titre">';
 print '<td>'.$langs->trans('PublicLinkGeneratedDate').'</td>';
 print '<td>'.$langs->trans('Email').'</td>';

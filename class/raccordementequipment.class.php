@@ -96,6 +96,80 @@ class RaccordementEquipment
 		return $rows;
 	}
 
+	/**
+	 * Fetch equipment attached to the PowerPlantPV power plant selected as site source.
+	 *
+	 * These rows are used only as form defaults. They are copied to the normalized
+	 * raccordement equipment table only when the user saves the ENEDIS request.
+	 *
+	 * @param Raccordement $raccordement Grid connection
+	 * @param string $type Equipment type
+	 * @return array<int,array{id:int,entity:int,fk_raccordement:int,fk_product:int,type:string,quantity:int,unit_power:float,ref:string,label:string}>
+	 */
+	public function fetchConfirmedPowerPlantLines($raccordement, $type)
+	{
+		$rows = array();
+		if (
+			!self::isAvailable()
+			|| !is_object($raccordement)
+			|| (string) $raccordement->site_source !== 'centralepv'
+			|| (int) $raccordement->fk_centrale_pv <= 0
+			|| empty($raccordement->date_collecte_soumission)
+			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
+			|| !in_array($type, array(self::TYPE_INVERTER, self::TYPE_MODULE), true)
+		) {
+			return $rows;
+		}
+
+		$category = $type === self::TYPE_INVERTER ? 'ONDULE' : 'MODULE';
+		$technicalTable = $type === self::TYPE_INVERTER ? 'powerplantpv_product_inverter' : 'powerplantpv_product_pvpanel';
+		$powerField = $type === self::TYPE_INVERTER ? 'ac_apparent_power' : 'pmax';
+		$powerPlantEntities = getEntity('powerplant');
+		$productEntities = getEntity('product');
+
+		$sql = 'SELECT MIN(pc.rowid) AS rowid, pc.entity, pc.fk_product, SUM(pc.qty) AS quantity,';
+		$sql .= ' p.ref, p.label, tech.'.$powerField.' AS unit_power';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.'powerplantpv_powerplantcomp AS pc';
+		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'powerplantpv_powerplant AS pp ON pp.rowid = pc.fk_powerplant AND pp.entity = pc.entity';
+		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'product AS p ON p.rowid = pc.fk_product';
+		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'product_extrafields AS pe ON pe.fk_object = p.rowid';
+		$sql .= ' INNER JOIN '.MAIN_DB_PREFIX.'c_powerplantpv_categorypv AS category ON category.rowid = pe.categorie_photovoltaique';
+		$sql .= ' LEFT JOIN (SELECT fk_product, entity, MAX('.$powerField.') AS '.$powerField;
+		$sql .= ' FROM '.MAIN_DB_PREFIX.$technicalTable.' WHERE entity IN ('.$productEntities.')';
+		$sql .= ' GROUP BY fk_product, entity) AS tech ON tech.fk_product = p.rowid AND tech.entity = p.entity';
+		$sql .= ' WHERE pc.fk_powerplant = '.((int) $raccordement->fk_centrale_pv);
+		$sql .= ' AND pc.entity IN ('.$powerPlantEntities.')';
+		$sql .= ' AND pp.entity IN ('.$powerPlantEntities.')';
+		$sql .= ' AND p.entity IN ('.$productEntities.')';
+		$sql .= " AND category.active = 1 AND category.code = '".$this->db->escape($category)."'";
+		$sql .= ' GROUP BY pc.entity, pc.fk_product, p.ref, p.label, tech.'.$powerField;
+		$sql .= ' ORDER BY p.ref ASC, pc.fk_product ASC';
+
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			$this->error = $this->db->lasterror();
+			return $rows;
+		}
+
+		while (is_object($obj = $this->db->fetch_object($resql))) {
+			$quantity = max(1, (int) $obj->quantity);
+			$rows[] = array(
+				'id' => (int) $obj->rowid,
+				'entity' => (int) $obj->entity,
+				'fk_raccordement' => (int) $raccordement->id,
+				'fk_product' => (int) $obj->fk_product,
+				'type' => $type,
+				'quantity' => $quantity,
+				'unit_power' => isset($obj->unit_power) ? (float) $obj->unit_power : 0.0,
+				'ref' => isset($obj->ref) ? (string) $obj->ref : '',
+				'label' => isset($obj->label) ? (string) $obj->label : '',
+			);
+		}
+		$this->db->free($resql);
+
+		return $rows;
+	}
+
 	/** @param int $fkRaccordement Raccordement id @return bool */
 	public function hasModules($fkRaccordement)
 	{

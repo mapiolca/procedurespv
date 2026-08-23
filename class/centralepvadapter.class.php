@@ -388,6 +388,48 @@ class CentralePVAdapter
 	}
 
 	/**
+	 * Prefill the ENEDIS request from values confirmed by the public collection.
+	 *
+	 * The values already stored specifically for the ENEDIS request always win.
+	 * This method only updates the in-memory object; the request form persists the
+	 * values when the user saves it.
+	 *
+	 * @param Raccordement $raccordement Grid connection to update in memory
+	 * @return list<string> Prefilled Raccordement field names
+	 */
+	public function prefillRaccordementRequestData($raccordement)
+	{
+		if (
+			!is_object($raccordement)
+			|| (string) $raccordement->site_source !== 'centralepv'
+			|| (int) $raccordement->fk_centrale_pv <= 0
+			|| empty($raccordement->date_collecte_soumission)
+			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
+		) {
+			return array();
+		}
+
+		$changedFields = array();
+		$currentRequestedPower = price2num((string) $raccordement->puissance_raccordement_demandee, 'MU');
+		$confirmedConnectionPower = price2num((string) $raccordement->puissance_injection_kva, 'MU');
+		if ((!is_numeric($currentRequestedPower) || (float) $currentRequestedPower <= 0)
+			&& is_numeric($confirmedConnectionPower) && (float) $confirmedConnectionPower > 0) {
+			$raccordement->puissance_raccordement_demandee = $confirmedConnectionPower;
+			$changedFields[] = 'puissance_raccordement_demandee';
+		}
+
+		$currentPhase = trim((string) $raccordement->mono_tri_confirme);
+		$confirmedNetworkType = trim((string) $raccordement->type_reseau);
+		$currentPhaseIsConfirmed = in_array($currentPhase, array('monophase', 'triphase'), true);
+		if (!$currentPhaseIsConfirmed && in_array($confirmedNetworkType, array('monophase', 'triphase', 'unknown'), true)) {
+			$raccordement->mono_tri_confirme = $confirmedNetworkType;
+			$changedFields[] = 'mono_tri_confirme';
+		}
+
+		return $changedFields;
+	}
+
+	/**
 	 * Synchronize mandate site corrections back to the native Centrale object.
 	 *
 	 * @param int $id Centrale identifier

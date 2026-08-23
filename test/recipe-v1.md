@@ -28,10 +28,11 @@
 7. Revenir côté interne et vérifier que les corrections, y compris celles des puissances, figurent dans le raccordement et dans la centrale PV sélectionnée.
 8. Vérifier dans le tableau des pièces que l'origine commence par une majuscule et que l'absence de fichier affiche le libellé natif « Pas de documents téléversés ».
 9. Valider la pièce et le mandat.
-10. Ouvrir `Demande de raccordement`, renseigner la référence ENEDIS et marquer déposé.
-11. Vérifier que le snapshot est figé.
-12. Ajouter une convention, la marquer signée.
-13. Marquer la mise en service réalisée.
+10. Ouvrir `Demande de raccordement` et vérifier que la puissance du raccordement, le type de réseau confirmé, les onduleurs et les modules de la centrale sont préremplis sans écraser une éventuelle saisie interne déjà enregistrée.
+11. Enregistrer la demande, la rouvrir, renseigner la référence ENEDIS et marquer déposé.
+12. Vérifier que le snapshot est figé.
+13. Ajouter une convention, la marquer signée.
+14. Marquer la mise en service réalisée.
 
 ### Résultat attendu
 
@@ -169,12 +170,13 @@ Résultats attendus : la synchronisation est atomique, respecte les droits et ne
 
 ## Scénario 8 - Équipements PowerPlantPV
 
-1. Sélectionner deux modèles d’onduleurs et deux modèles de modules, avec des quantités différentes.
-2. Vérifier les puissances unitaires, les totaux de ligne et les agrégats affichés en direct.
-3. Enregistrer et comparer les totaux serveur : somme des quantités, kVA des onduleurs et kWc des modules.
-4. Tester un produit sans puissance avec puis sans les droits de modification PowerPlantPV.
-5. Modifier ensuite le catalogue : l’instantané existant ne change pas ; après suppression/réajout, la valeur actuelle est reprise.
-6. Tester un produit d’une mauvaise catégorie et un produit d’une entité inaccessible.
+1. Lier une centrale PowerPlantPV contenant deux modèles d’onduleurs et deux modèles de modules avec des quantités différentes, puis soumettre la collecte publique.
+2. Ouvrir la demande de raccordement et vérifier que ces quatre produits et leurs quantités sont déjà sélectionnés.
+3. Vérifier les puissances unitaires, les totaux de ligne et les agrégats affichés en direct.
+4. Enregistrer et comparer les totaux serveur : somme des quantités, kVA des onduleurs et kWc des modules.
+5. Tester un produit sans puissance avec puis sans les droits de modification PowerPlantPV.
+6. Modifier ensuite le catalogue : l’instantané existant ne change pas ; après suppression/réajout, la valeur actuelle est reprise.
+7. Tester un produit d’une mauvaise catégorie et un produit d’une entité inaccessible.
 
 Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, les caractéristiques manquantes sont corrigées uniquement via les API PowerPlantPV et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
 
