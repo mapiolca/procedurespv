@@ -327,7 +327,9 @@ if (!empty($historyLinks)) {
 }
 print '</tbody></table></div></form>';
 
-print '<br><div class="div-table-responsive"><table class="noborder centpercent">';
+print '<div class="clearboth"></div>';
+print load_fiche_titre($langs->trans('PublicSectionPieces'), '', 'file-upload');
+print '<div class="div-table-responsive"><table class="noborder centpercent">';
 print '<tr class="liste_titre"><td>'.$langs->trans('Piece').'</td><td>'.$langs->trans('Origin').'</td><td class="center">'.$langs->trans('Status').'</td><td>'.$langs->trans('File').'</td>'.($pieceActionColumn ? '<td class="center">'.$langs->trans('Action').'</td>' : '').'</tr>';
 if (!empty($pieces)) {
 	foreach ($pieces as $piece) {

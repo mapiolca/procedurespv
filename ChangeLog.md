@@ -65,3 +65,4 @@
 - Ajout de l’historique paginé des liens publics de collecte avec destinataire, dates, accès et badges de statut détaillés, sans exposition des tokens ni des données techniques sensibles.
 - Affichage permanent du tableau des conventions et déplacement des formulaires d’ajout et de modification dans une fenêtre modale native Dolibarr.
 - Enregistrement automatique des dates de réception et de signature lors du téléversement des documents correspondants, avec possibilité de saisie manuelle prioritaire.
+- Ajout du titre natif « Pièces à déposer » et rétablissement de l’espacement Dolibarr entre l’historique des liens publics et le tableau des pièces.
