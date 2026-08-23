@@ -40,13 +40,15 @@ print '</table>';
 
 print '<br>';
 print '<table class="noborder centpercent">';
-print '<tr class="liste_titre"><td>'.$langs->trans('Feature').'</td><td>'.$langs->trans('Status').'</td><td>'.$langs->trans('Reason').'</td></tr>';
+print '<tr class="liste_titre"><td>'.$langs->trans('Feature').'</td><td class="center">'.$langs->trans('Status').'</td><td>'.$langs->trans('Reason').'</td></tr>';
 foreach (ProceduresPVCompatibility::getCompatibilityFeatures() as $feature) {
-	$status = !empty($feature['available']) ? $langs->trans('Available') : $langs->trans('Unavailable');
+	$isAvailable = !empty($feature['available']);
+	$statusLabel = $isAvailable ? $langs->trans('Available') : $langs->trans('Unavailable');
+	$status = dolGetStatus($statusLabel, '', '', $isAvailable ? 'status4' : 'status8', 5);
 	$reason = !empty($feature['reason']) ? $langs->trans($feature['reason']) : '';
 	print '<tr class="oddeven">';
 	print '<td><strong>'.$langs->trans($feature['label']).'</strong><br><span class="opacitymedium">'.$langs->trans($feature['description']).'</span></td>';
-	print '<td>'.$status.'</td>';
+	print '<td class="center">'.$status.'</td>';
 	print '<td>'.$reason.'</td>';
 	print '</tr>';
 }

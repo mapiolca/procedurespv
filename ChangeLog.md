@@ -61,3 +61,4 @@
 - Correction de la détection de l’étape active dans la collecte publique : la section cliquée reste sélectionnée pendant le défilement et le seuil d’activation tient compte de la zone réellement visible sous la barre fixe.
 - Remplacement de l’introduction publique du mandat par le texte contractuel, simplification du premier pouvoir et déplacement du détail des documents dans l’infobulle d’information native Dolibarr.
 - Intégration native des événements Agenda par les triggers CRUD `PVPROC_RACCORDEMENT_CREATE`, `UPDATE` et `DELETE`, déclarés de manière idempotente dans `sql/data_agenda.sql`, avec libellés propres à chaque action utilisateur, résolution de l’objet externe par hook et suppression des créations `ActionComm` manuelles afin d’éviter les doublons.
+- Affichage des états de disponibilité du tableau de compatibilité sous forme de badges de statut Dolibarr natifs.
