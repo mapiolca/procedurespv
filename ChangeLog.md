@@ -67,4 +67,4 @@
 - Enregistrement automatique des dates de réception et de signature lors du téléversement des documents correspondants, avec possibilité de saisie manuelle prioritaire.
 - Ajout du titre natif « Pièces à déposer » et rétablissement de l’espacement Dolibarr entre l’historique des liens publics et le tableau des pièces.
 - Affichage effectif des cinq datepickers natifs, avec valeurs vides autorisées dans les modales d’ajout et de modification des conventions.
-- Préremplissage de la demande de raccordement avec la puissance et le type de réseau confirmés par la collecte, ainsi qu’avec les onduleurs et modules de la centrale PowerPlantPV sélectionnée, sans écraser les données déjà enregistrées.
+- Préremplissage persistant de la demande de raccordement lors de la validation de la collecte avec la puissance, le type de réseau, les onduleurs et les modules confirmés ; ces valeurs remplacent le préremplissage initial issu de l’association de la centrale PowerPlantPV.

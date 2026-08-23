@@ -390,14 +390,18 @@ class CentralePVAdapter
 	/**
 	 * Prefill the ENEDIS request from values confirmed by the public collection.
 	 *
-	 * The values already stored specifically for the ENEDIS request always win.
-	 * This method only updates the in-memory object; the request form persists the
-	 * values when the user saves it.
+	 * By default, values already stored specifically for the ENEDIS request win.
+	 * Collection validation calls this method with overwrite enabled so that the
+	 * confirmed collection values replace the defaults populated when the power
+	 * plant was associated. This method only updates the in-memory object; the
+	 * validation action persists the result. The request page keeps the same logic
+	 * as a compatibility fallback for collections validated before this feature.
 	 *
 	 * @param Raccordement $raccordement Grid connection to update in memory
+	 * @param bool $overwrite Replace an existing request default with the value confirmed by the collection
 	 * @return list<string> Prefilled Raccordement field names
 	 */
-	public function prefillRaccordementRequestData($raccordement)
+	public function prefillRaccordementRequestData($raccordement, $overwrite = false)
 	{
 		if (
 			!is_object($raccordement)
@@ -412,18 +416,22 @@ class CentralePVAdapter
 		$changedFields = array();
 		$currentRequestedPower = price2num((string) $raccordement->puissance_raccordement_demandee, 'MU');
 		$confirmedConnectionPower = price2num((string) $raccordement->puissance_injection_kva, 'MU');
-		if ((!is_numeric($currentRequestedPower) || (float) $currentRequestedPower <= 0)
+		if (($overwrite || !is_numeric($currentRequestedPower) || (float) $currentRequestedPower <= 0)
 			&& is_numeric($confirmedConnectionPower) && (float) $confirmedConnectionPower > 0) {
-			$raccordement->puissance_raccordement_demandee = $confirmedConnectionPower;
-			$changedFields[] = 'puissance_raccordement_demandee';
+			if ((string) $currentRequestedPower !== (string) $confirmedConnectionPower) {
+				$raccordement->puissance_raccordement_demandee = $confirmedConnectionPower;
+				$changedFields[] = 'puissance_raccordement_demandee';
+			}
 		}
 
 		$currentPhase = trim((string) $raccordement->mono_tri_confirme);
 		$confirmedNetworkType = trim((string) $raccordement->type_reseau);
 		$currentPhaseIsConfirmed = in_array($currentPhase, array('monophase', 'triphase'), true);
-		if (!$currentPhaseIsConfirmed && in_array($confirmedNetworkType, array('monophase', 'triphase', 'unknown'), true)) {
-			$raccordement->mono_tri_confirme = $confirmedNetworkType;
-			$changedFields[] = 'mono_tri_confirme';
+		if (($overwrite || !$currentPhaseIsConfirmed) && in_array($confirmedNetworkType, array('monophase', 'triphase', 'unknown'), true)) {
+			if ($currentPhase !== $confirmedNetworkType) {
+				$raccordement->mono_tri_confirme = $confirmedNetworkType;
+				$changedFields[] = 'mono_tri_confirme';
+			}
 		}
 
 		return $changedFields;

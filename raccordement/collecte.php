@@ -10,6 +10,7 @@ require_once dol_buildpath('/procedurespv/class/piece.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/signature.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/collectionservice.class.php', 0);
 require_once dol_buildpath('/procedurespv/class/centralepvadapter.class.php', 0);
+require_once dol_buildpath('/procedurespv/class/raccordementequipment.class.php', 0);
 require_once dol_buildpath('/procedurespv/lib/procedurespv.lib.php', 0);
 
 $langs->loadLangs(array('companies', 'documents', 'procedurespv@procedurespv'));
@@ -208,13 +209,27 @@ if ($action === 'validate_collection') {
 	if (!$collectionService->canValidateCollection((int) $object->id, (int) $latestLink->id)) {
 		setEventMessages($langs->trans($collectionService->error), null, 'errors');
 	} else {
-		$object->status = 6;
-		$object->context['trigger_reason'] = 'collection_validated';
-		$object->context['changed_fields'] = array('status');
-		if ($object->update($user) > 0) {
-			setEventMessages($langs->trans('CollecteValidated'), null, 'mesgs');
+		$db->begin();
+		$result = 0;
+		$centralePVAdapter = new CentralePVAdapter($db);
+		$requestChangedFields = $centralePVAdapter->prefillRaccordementRequestData($object, true);
+		$equipmentService = new RaccordementEquipment($db);
+		$equipmentPrefillResult = $equipmentService->prefillFromConfirmedPowerPlant($object, $user, true, false);
+		if ($equipmentPrefillResult < 0) {
+			$db->rollback();
+			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
 		} else {
-			setEventMessages($object->error, $object->errors, 'errors');
+			$object->status = 6;
+			$object->context['trigger_reason'] = 'collection_validated';
+			$object->context['changed_fields'] = array_values(array_unique(array_merge(array('status'), $requestChangedFields, $equipmentService->changedFields)));
+			$result = $object->update($user);
+			if ($result > 0) {
+				$db->commit();
+				setEventMessages($langs->trans('CollecteValidated'), null, 'mesgs');
+			} else {
+				$db->rollback();
+				setEventMessages($object->error, $object->errors, 'errors');
+			}
 		}
 	}
 }

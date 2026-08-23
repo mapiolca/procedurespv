@@ -204,11 +204,16 @@ $pieces = $pieceFetcher->fetchAllByRaccordement((int) $object->id);
 $signature = new Signature($db);
 $signature->fetchLatestForRaccordement((int) $object->id, Signature::TYPE_MANDAT_ENEDIS);
 $centraleAdapter = new CentralePVAdapter($db);
-$centraleAdapter->prefillRaccordementRequestData($object);
+$collectionIsValidated = (int) $object->status >= 6;
+if ($collectionIsValidated) {
+	// Compatibility fallback for records validated before persistent prefill was introduced.
+	// Once the request contains a value, later internal edits must remain authoritative.
+	$centraleAdapter->prefillRaccordementRequestData($object);
+}
 $equipmentService = new RaccordementEquipment($db);
 $inverterLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_INVERTER);
 $moduleLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_MODULE);
-if (RaccordementEquipment::isAvailable()) {
+if ($collectionIsValidated && RaccordementEquipment::isAvailable()) {
 	$hasHistoricalInverters = trim((string) $object->onduleurs) !== '' || (int) $object->nombre_onduleurs > 0;
 	$hasHistoricalModules = trim((string) $object->modules) !== '' || (int) $object->nombre_modules > 0;
 	if (empty($inverterLines) && !$hasHistoricalInverters) {
