@@ -418,6 +418,7 @@ ConventionReceivedDocument=Received document
 ConventionSignedDocument=Signed document
 ConventionCurrentDocument=Current file:
 ConventionDocumentUploadHelp=This file will be added to the grid connection attachments. Maximum size: %s.
+ConventionDocumentDateHelp=This date is recorded automatically when the corresponding document is uploaded. You can change it manually.
 ConventionTypeCACSI=CACSI
 ConventionTypeCAE=CAE
 ConventionTypeCARDI=CARD-I

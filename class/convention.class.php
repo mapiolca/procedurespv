@@ -213,13 +213,13 @@ class Convention
 
 		$now = dol_now();
 		$sql = 'UPDATE '.MAIN_DB_PREFIX.'pvproc_convention SET status = '.((int) $status);
-		if ($status === self::STATUS_RECEIVED || $status === self::STATUS_TO_CONTROL) {
+		if (($status === self::STATUS_RECEIVED || $status === self::STATUS_TO_CONTROL) && empty($this->date_reception)) {
 			$sql .= ", date_reception = '".$this->db->idate($now)."'";
 		}
 		if ($status === self::STATUS_SENT_FOR_SIGNATURE) {
 			$sql .= ", date_envoi_client = '".$this->db->idate($now)."'";
 		}
-		if ($status === self::STATUS_SIGNED) {
+		if ($status === self::STATUS_SIGNED && empty($this->date_signature_client)) {
 			$sql .= ", date_signature_client = '".$this->db->idate($now)."'";
 		}
 		if ($status === self::STATUS_RETURNED_ENEDIS) {

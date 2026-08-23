@@ -89,9 +89,18 @@ function procedurespvConventionApplyPayload($convention, array $payload)
 function procedurespvConventionStoreUploadedDocuments($object, $convention, array &$payload)
 {
 	$storedFiles = array();
+	/** @var array<string, array{payload_key:string,date_key:string,code:string}> $definitions */
 	$definitions = array(
-		'document_recu_file' => array('payload_key' => 'document_recu', 'code' => 'convention_'.((int) $convention->id).'_received'),
-		'document_signe_file' => array('payload_key' => 'document_signe', 'code' => 'convention_'.((int) $convention->id).'_signed'),
+		'document_recu_file' => array(
+			'payload_key' => 'document_recu',
+			'date_key' => 'date_reception',
+			'code' => 'convention_'.((int) $convention->id).'_received',
+		),
+		'document_signe_file' => array(
+			'payload_key' => 'document_signe',
+			'date_key' => 'date_signature_client',
+			'code' => 'convention_'.((int) $convention->id).'_signed',
+		),
 	);
 
 	foreach ($definitions as $fieldName => $definition) {
@@ -101,6 +110,9 @@ function procedurespvConventionStoreUploadedDocuments($object, $convention, arra
 		}
 		if ($upload['result'] > 0) {
 			$payload[$definition['payload_key']] = $upload['filename'];
+			if (empty($payload[$definition['date_key']])) {
+				$payload[$definition['date_key']] = dol_now();
+			}
 			$storedFiles[] = $upload['filename'];
 		}
 	}
@@ -452,12 +464,14 @@ if ($permissiontowrite) {
 	print '<tr><td>'.$langs->trans('ConventionStatus').'</td><td>'.$editedConvention->getLibStatut(5).'</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionReceptionDate').'</td><td>';
 	$form->selectDate($editedConvention->date_reception ? (int) $editedConvention->date_reception : -1, 'date_reception', 1, 1, 1, '', 1, 1);
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentDateHelp').'</div>';
 	print '</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionClientSentDate').'</td><td>';
 	$form->selectDate($editedConvention->date_envoi_client ? (int) $editedConvention->date_envoi_client : -1, 'date_envoi_client', 1, 1, 1, '', 1, 1);
 	print '</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionClientSignatureDate').'</td><td>';
 	$form->selectDate($editedConvention->date_signature_client ? (int) $editedConvention->date_signature_client : -1, 'date_signature_client', 1, 1, 1, '', 1, 1);
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentDateHelp').'</div>';
 	print '</td></tr>';
 	print '<tr><td>'.$langs->trans('ConventionReturnEnedisDate').'</td><td>';
 	$form->selectDate($editedConvention->date_retour_enedis ? (int) $editedConvention->date_retour_enedis : -1, 'date_retour_enedis', 1, 1, 1, '', 1, 1);

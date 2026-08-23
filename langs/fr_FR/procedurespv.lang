@@ -418,6 +418,7 @@ ConventionReceivedDocument=Document reçu
 ConventionSignedDocument=Document signé
 ConventionCurrentDocument=Fichier actuel :
 ConventionDocumentUploadHelp=Ce fichier sera ajouté aux fichiers joints du raccordement. Taille maximale : %s.
+ConventionDocumentDateHelp=Cette date est enregistrée automatiquement lors du téléversement du document correspondant. Vous pouvez la modifier manuellement.
 ConventionTypeCACSI=CACSI
 ConventionTypeCAE=CAE
 ConventionTypeCARDI=CARD-I

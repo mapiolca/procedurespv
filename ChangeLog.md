@@ -64,3 +64,4 @@
 - Affichage des états de disponibilité du tableau de compatibilité sous forme de badges de statut Dolibarr natifs.
 - Ajout de l’historique paginé des liens publics de collecte avec destinataire, dates, accès et badges de statut détaillés, sans exposition des tokens ni des données techniques sensibles.
 - Affichage permanent du tableau des conventions et déplacement des formulaires d’ajout et de modification dans une fenêtre modale native Dolibarr.
+- Enregistrement automatique des dates de réception et de signature lors du téléversement des documents correspondants, avec possibilité de saisie manuelle prioritaire.
