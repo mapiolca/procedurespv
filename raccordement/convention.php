@@ -59,6 +59,26 @@ function procedurespvConventionReadPayload()
 }
 
 /**
+ * Populate a convention used by the add/edit form from submitted values.
+ *
+ * @param Convention $convention Form convention
+ * @param array<string, string|int|null> $payload Submitted values
+ * @return void
+ */
+function procedurespvConventionApplyPayload($convention, array $payload)
+{
+	$convention->type_convention = (string) $payload['type_convention'];
+	$convention->ref_convention = (string) $payload['ref_convention'];
+	$convention->status = (int) $payload['status'];
+	$convention->date_reception = $payload['date_reception'];
+	$convention->date_envoi_client = $payload['date_envoi_client'];
+	$convention->date_signature_client = $payload['date_signature_client'];
+	$convention->date_retour_enedis = $payload['date_retour_enedis'];
+	$convention->date_validation = $payload['date_validation'];
+	$convention->commentaire = (string) $payload['commentaire'];
+}
+
+/**
  * Store convention documents in the native raccordement attached-files directory.
  *
  * @param Raccordement $object Parent object
@@ -135,6 +155,7 @@ $langs->loadLangs(array('documents', 'other', 'procedurespv@procedurespv'));
 $id = GETPOSTINT('id');
 $lineid = GETPOSTINT('lineid');
 $action = GETPOST('action', 'aZ09');
+$displayForm = GETPOST('displayform', 'alpha');
 
 if (!isModEnabled('procedurespv')) {
 	accessforbidden();
@@ -152,6 +173,8 @@ if (!$permissiontoread) {
 	accessforbidden();
 }
 $workflow = new RaccordementWorkflow($db);
+/** @var array<string, string|int|null>|null $submittedConventionPayload */
+$submittedConventionPayload = null;
 
 $sensitiveActions = array('add_convention', 'update_convention', 'mark_received', 'mark_sent_signature', 'mark_signed', 'mark_returned_enedis', 'mark_validated', 'mark_obsolete');
 if (in_array($action, $sensitiveActions, true) && (!GETPOST('token', 'alpha') || (function_exists('checkToken') && !checkToken()))) {
@@ -166,6 +189,7 @@ if ($action === 'add_convention') {
 	$convention = new Convention($db);
 	$payload = procedurespvConventionReadPayload();
 	$payload['status'] = Convention::STATUS_NOT_RECEIVED;
+	$submittedConventionPayload = $payload;
 	$storedFiles = array();
 	$uploadError = '';
 	$db->begin();
@@ -215,6 +239,7 @@ if ($action === 'update_convention') {
 	$payload['status'] = (int) $convention->status;
 	$payload['document_recu'] = (string) $convention->document_recu;
 	$payload['document_signe'] = (string) $convention->document_signe;
+	$submittedConventionPayload = $payload;
 	$storedFiles = array();
 	$uploadError = '';
 	$db->begin();
@@ -304,10 +329,26 @@ $form = new Form($db);
 $conventionFetcher = new Convention($db);
 $conventions = $conventionFetcher->fetchAllByRaccordement((int) $object->id);
 $editedConvention = new Convention($db);
-if ($action === 'edit' && $lineid > 0) {
+$openConventionDialog = false;
+if (in_array($action, array('edit', 'update_convention'), true) && $lineid > 0) {
+	if (!$permissiontowrite) {
+		accessforbidden();
+	}
 	$result = $editedConvention->fetch($lineid);
 	if ($result <= 0 || (int) $editedConvention->fk_raccordement !== (int) $object->id) {
 		accessforbidden($langs->trans('ErrorRecordNotFound'));
+	}
+	$openConventionDialog = true;
+	if ($action === 'update_convention' && is_array($submittedConventionPayload)) {
+		procedurespvConventionApplyPayload($editedConvention, $submittedConventionPayload);
+	}
+} elseif ($displayForm === 'add' || $action === 'add_convention') {
+	if (!$permissiontowrite) {
+		accessforbidden();
+	}
+	$openConventionDialog = true;
+	if ($action === 'add_convention' && is_array($submittedConventionPayload)) {
+		procedurespvConventionApplyPayload($editedConvention, $submittedConventionPayload);
 	}
 }
 
@@ -319,74 +360,18 @@ print dol_get_fiche_head($head, 'convention', $langs->trans('Raccordement'), -1,
 $linkback = '<a href="'.dol_buildpath('/procedurespv/raccordement/list.php', 1).'">'.$langs->trans('BackToList').'</a>';
 dol_banner_tab($object, 'ref', $linkback, 1, 'ref', 'ref');
 
+$isEdit = ((int) $editedConvention->id > 0);
+$formAction = $isEdit ? 'update_convention' : 'add_convention';
+$formTitle = $isEdit ? $langs->trans('EditConvention') : $langs->trans('AddConvention');
+$pageUrl = dol_buildpath('/procedurespv/raccordement/convention.php', 1).'?id='.(int) $object->id;
+
 if ($permissiontowrite) {
-	$isEdit = ((int) $editedConvention->id > 0);
-	$formAction = $isEdit ? 'update_convention' : 'add_convention';
-	$formTitle = $isEdit ? $langs->trans('EditConvention') : $langs->trans('AddConvention');
-	$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
-	$acceptedFileTypes = array();
-	foreach ($allowedExtensions as $allowedExtension) {
-		if (preg_match('/^[a-z0-9]+$/', $allowedExtension)) {
-			$acceptedFileTypes[] = '.'.$allowedExtension;
-		}
-	}
-	$acceptAttribute = !empty($acceptedFileTypes) ? ' accept="'.dol_escape_htmltag(implode(',', $acceptedFileTypes)).'"' : '';
-	$maximumUploadSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
-
-	print load_fiche_titre($formTitle, '', '');
-	print '<form method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">';
-	print '<input type="hidden" name="token" value="'.newToken().'">';
-	print '<input type="hidden" name="action" value="'.$formAction.'">';
-	if ($isEdit) {
-		print '<input type="hidden" name="lineid" value="'.((int) $editedConvention->id).'">';
-	}
-
-	print '<table class="border centpercent tableforfield">';
-	print '<tr><td class="titlefield fieldrequired">'.$langs->trans('ConventionType').'</td><td><select class="flat minwidth300" name="type_convention" id="type_convention">';
-	foreach (Convention::getTypeLabels() as $value => $labelKey) {
-		print '<option value="'.dol_escape_htmltag($value).'"'.($editedConvention->type_convention === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
-	}
-	print '</select>'.ajax_combobox('type_convention').'</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionReference').'</td><td><input type="text" class="flat minwidth300" name="ref_convention" value="'.dol_escape_htmltag((string) $editedConvention->ref_convention).'"></td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionStatus').'</td><td>'.$editedConvention->getLibStatut(5).'</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionReceptionDate').'</td><td>';
-	$form->selectDate($editedConvention->date_reception ? (int) $editedConvention->date_reception : -1, 'date_reception', 1, 1, 1, '', 1, 1);
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionClientSentDate').'</td><td>';
-	$form->selectDate($editedConvention->date_envoi_client ? (int) $editedConvention->date_envoi_client : -1, 'date_envoi_client', 1, 1, 1, '', 1, 1);
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionClientSignatureDate').'</td><td>';
-	$form->selectDate($editedConvention->date_signature_client ? (int) $editedConvention->date_signature_client : -1, 'date_signature_client', 1, 1, 1, '', 1, 1);
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionReturnEnedisDate').'</td><td>';
-	$form->selectDate($editedConvention->date_retour_enedis ? (int) $editedConvention->date_retour_enedis : -1, 'date_retour_enedis', 1, 1, 1, '', 1, 1);
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionValidationDate').'</td><td>';
-	$form->selectDate($editedConvention->date_validation ? (int) $editedConvention->date_validation : -1, 'date_validation', 1, 1, 1, '', 1, 1);
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionReceivedDocument').'</td><td>';
-	print '<input type="file" class="flat minwidth400" name="document_recu_file"'.$acceptAttribute.'>';
-	if ((string) $editedConvention->document_recu !== '') {
-		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_recu).'</div>';
-	}
-	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('ConventionSignedDocument').'</td><td>';
-	print '<input type="file" class="flat minwidth400" name="document_signe_file"'.$acceptAttribute.'>';
-	if ((string) $editedConvention->document_signe !== '') {
-		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_signe).'</div>';
-	}
-	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
-	print '</td></tr>';
-	print '<tr><td>'.$langs->trans('Comment').'</td><td><textarea class="flat centpercent" name="commentaire" rows="3">'.dol_escape_htmltag((string) $editedConvention->commentaire).'</textarea></td></tr>';
-	print '</table>';
-
-	print '<div class="center"><input type="submit" class="button button-save" value="'.$langs->trans('Save').'"></div>';
-	print '</form>';
-	print '<br>';
+	print '<div class="tabsAction">';
+	print '<a id="pvproc-open-convention-dialog" class="butAction" href="'.dol_escape_htmltag($pageUrl.'&displayform=add').'">'.$langs->trans('AddConvention').'</a>';
+	print '</div>';
 }
 
-print '<table class="noborder centpercent">';
+print '<div class="div-table-responsive"><table class="noborder centpercent">';
 print '<tr class="liste_titre">';
 print '<td>'.$langs->trans('ConventionType').'</td>';
 print '<td>'.$langs->trans('ConventionReference').'</td>';
@@ -436,7 +421,109 @@ if (!empty($conventions)) {
 } else {
 	print '<tr class="oddeven"><td colspan="7"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
 }
-print '</table>';
+print '</table></div>';
+
+if ($permissiontowrite) {
+	$allowedExtensions = array_filter(array_map('trim', explode(',', strtolower(getDolGlobalString('PROCEDURESPV_PUBLIC_UPLOAD_ALLOWED_EXTENSIONS', 'pdf,jpg,jpeg,png')))));
+	$acceptedFileTypes = array();
+	foreach ($allowedExtensions as $allowedExtension) {
+		if (preg_match('/^[a-z0-9]+$/', $allowedExtension)) {
+			$acceptedFileTypes[] = '.'.$allowedExtension;
+		}
+	}
+	$acceptAttribute = !empty($acceptedFileTypes) ? ' accept="'.dol_escape_htmltag(implode(',', $acceptedFileTypes)).'"' : '';
+	$maximumUploadSize = getDolGlobalInt('PROCEDURESPV_PUBLIC_UPLOAD_MAX_SIZE', 10 * 1024 * 1024);
+
+	print '<div id="pvproc-convention-dialog" title="'.dol_escape_htmltag($formTitle).'" style="display:none">';
+	print '<form id="pvproc-convention-form" method="POST" enctype="multipart/form-data" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'?id='.(int) $object->id.'">';
+	print '<input type="hidden" name="token" value="'.newToken().'">';
+	print '<input type="hidden" name="action" value="'.$formAction.'">';
+	if ($isEdit) {
+		print '<input type="hidden" name="lineid" value="'.((int) $editedConvention->id).'">';
+	}
+
+	print '<table class="border centpercent tableforfield">';
+	print '<tr><td class="titlefield fieldrequired">'.$langs->trans('ConventionType').'</td><td><select class="flat minwidth300" name="type_convention" id="type_convention">';
+	foreach (Convention::getTypeLabels() as $value => $labelKey) {
+		print '<option value="'.dol_escape_htmltag($value).'"'.($editedConvention->type_convention === $value ? ' selected' : '').'>'.$langs->trans($labelKey).'</option>';
+	}
+	print '</select>'.ajax_combobox('type_convention').'</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionReference').'</td><td><input type="text" class="flat minwidth300" name="ref_convention" value="'.dol_escape_htmltag((string) $editedConvention->ref_convention).'"></td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionStatus').'</td><td>'.$editedConvention->getLibStatut(5).'</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionReceptionDate').'</td><td>';
+	$form->selectDate($editedConvention->date_reception ? (int) $editedConvention->date_reception : -1, 'date_reception', 1, 1, 1, '', 1, 1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionClientSentDate').'</td><td>';
+	$form->selectDate($editedConvention->date_envoi_client ? (int) $editedConvention->date_envoi_client : -1, 'date_envoi_client', 1, 1, 1, '', 1, 1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionClientSignatureDate').'</td><td>';
+	$form->selectDate($editedConvention->date_signature_client ? (int) $editedConvention->date_signature_client : -1, 'date_signature_client', 1, 1, 1, '', 1, 1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionReturnEnedisDate').'</td><td>';
+	$form->selectDate($editedConvention->date_retour_enedis ? (int) $editedConvention->date_retour_enedis : -1, 'date_retour_enedis', 1, 1, 1, '', 1, 1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionValidationDate').'</td><td>';
+	$form->selectDate($editedConvention->date_validation ? (int) $editedConvention->date_validation : -1, 'date_validation', 1, 1, 1, '', 1, 1);
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionReceivedDocument').'</td><td>';
+	print '<input type="file" class="flat minwidth400" name="document_recu_file"'.$acceptAttribute.'>';
+	if ((string) $editedConvention->document_recu !== '') {
+		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_recu).'</div>';
+	}
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('ConventionSignedDocument').'</td><td>';
+	print '<input type="file" class="flat minwidth400" name="document_signe_file"'.$acceptAttribute.'>';
+	if ((string) $editedConvention->document_signe !== '') {
+		print '<div class="opacitymedium">'.$langs->trans('ConventionCurrentDocument').' '.procedurespvConventionRenderDocument($object, (string) $editedConvention->document_signe).'</div>';
+	}
+	print '<div class="opacitymedium">'.$langs->trans('ConventionDocumentUploadHelp', dol_print_size($maximumUploadSize, 1, 1)).'</div>';
+	print '</td></tr>';
+	print '<tr><td>'.$langs->trans('Comment').'</td><td><textarea class="flat centpercent" name="commentaire" rows="3">'.dol_escape_htmltag((string) $editedConvention->commentaire).'</textarea></td></tr>';
+	print '</table>';
+	print '<div class="center">';
+	print '<button type="button" class="button button-cancel pvproc-close-convention-dialog">'.$langs->trans('Cancel').'</button> ';
+	print '<input type="submit" class="button button-save" value="'.$langs->trans('Save').'">';
+	print '</div>';
+	print '</form></div>';
+
+	print '<script nonce="'.getNonce().'" type="text/javascript">
+jQuery(function ($) {
+	var dialog = $("#pvproc-convention-dialog");
+	var openOnLoad = '.($openConventionDialog ? 'true' : 'false').';
+	var editMode = '.($isEdit ? 'true' : 'false').';
+	if ($.fn.dialog) {
+		dialog.dialog({
+			autoOpen: false,
+			modal: true,
+			width: Math.min(window.innerWidth * 0.9, 1100),
+			maxHeight: Math.max(300, window.innerHeight - 100),
+			close: function () {
+				if (openOnLoad && window.history && window.history.replaceState) {
+					window.history.replaceState({}, document.title, "'.dol_escape_js($pageUrl).'");
+				}
+			}
+		});
+		$("#pvproc-open-convention-dialog").on("click", function (event) {
+			if (editMode) {
+				return true;
+			}
+			event.preventDefault();
+			dialog.dialog("open");
+			return false;
+		});
+		$(".pvproc-close-convention-dialog").on("click", function () {
+			dialog.dialog("close");
+		});
+		if (openOnLoad) {
+			dialog.dialog("open");
+		}
+	} else if (openOnLoad) {
+		dialog.show();
+	}
+});
+</script>';
+}
 
 print dol_get_fiche_end();
 

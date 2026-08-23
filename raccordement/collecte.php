@@ -16,6 +16,12 @@ $langs->loadLangs(array('companies', 'documents', 'procedurespv@procedurespv'));
 
 $id = GETPOSTINT('id');
 $action = GETPOST('action', 'aZ09');
+$historyPage = max(0, GETPOSTINT('page'));
+$historyLimit = GETPOSTINT('limit');
+if ($historyLimit <= 0) {
+	$historyLimit = 20;
+}
+$historyLimit = min($historyLimit, 5000);
 
 if (!isModEnabled('procedurespv')) {
 	accessforbidden();
@@ -217,6 +223,27 @@ if ($action === 'validate_collection') {
 $object->fetch($id);
 $latestLink = new PublicLink($db);
 $latestLink->fetchLatestForRaccordement((int) $object->id, PublicLink::TYPE_COLLECTE_RACCORDEMENT);
+$historyFetcher = new PublicLink($db);
+$historyTotal = $historyFetcher->countForRaccordement((int) $object->id, PublicLink::TYPE_COLLECTE_RACCORDEMENT);
+$historyLinks = array();
+$historyNum = 0;
+if ($historyTotal >= 0) {
+	$historyLastPage = $historyTotal > 0 ? (int) ceil($historyTotal / $historyLimit) - 1 : 0;
+	$historyPage = min($historyPage, $historyLastPage);
+	$historyLinks = $historyFetcher->fetchAllForRaccordement(
+		(int) $object->id,
+		PublicLink::TYPE_COLLECTE_RACCORDEMENT,
+		$historyLimit + 1,
+		$historyPage * $historyLimit
+	);
+	$historyNum = count($historyLinks);
+	if ($historyFetcher->error !== '') {
+		setEventMessages($historyFetcher->error, $historyFetcher->errors, 'errors');
+	}
+} else {
+	setEventMessages($historyFetcher->error, $historyFetcher->errors, 'errors');
+	$historyTotal = 0;
+}
 $pieceFetcher = new Piece($db);
 $pieces = (int) $latestLink->id > 0 ? $pieceFetcher->fetchAllByRaccordement((int) $object->id, (int) $latestLink->id) : $pieceFetcher->fetchAllByRaccordement((int) $object->id);
 $latestSignature = new Signature($db);
@@ -252,9 +279,7 @@ print '</table></div></div>';
 print '<div class="fichehalfright"><div class="div-table-responsive-no-min"><table class="border centpercent">';
 print '<tr class="liste_titre"><td colspan="2">'.$langs->trans('LatestPublicLink').'</td></tr>';
 if ((int) $latestLink->id > 0) {
-	$linkStatusKey = (int) $latestLink->status < 0 ? 'PublicLinkStatusRevoked' : 'PublicLinkStatus'.((int) $latestLink->status);
-	$linkStatusType = (int) $latestLink->status === PublicLink::STATUS_SUBMITTED ? 'status1' : ((int) $latestLink->status === PublicLink::STATUS_ACTIVE ? 'status1' : 'status8');
-	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td>'.dolGetStatus($langs->trans($linkStatusKey), '', '', $linkStatusType, 5).'</td></tr>';
+	print '<tr><td class="titlefield">'.$langs->trans('Status').'</td><td>'.$latestLink->getLibStatut(5).'</td></tr>';
 	print '<tr><td>'.$langs->trans('Email').'</td><td>'.dol_escape_htmltag((string) $latestLink->email_destinataire).'</td></tr>';
 	print '<tr><td>'.$langs->trans('ExpirationDate').'</td><td>'.(!empty($latestLink->date_expiration) ? dol_print_date((int) $latestLink->date_expiration, 'dayhour') : '').'</td></tr>';
 	print '<tr><td>'.$langs->trans('AccessCount').'</td><td>'.((int) $latestLink->nb_access).'</td></tr>';
@@ -263,6 +288,44 @@ if ((int) $latestLink->id > 0) {
 	print '<tr class="oddeven"><td colspan="2"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
 }
 print '</table></div></div><div class="clearboth"></div></div>';
+
+$historyParam = '&id='.(int) $object->id.'&limit='.(int) $historyLimit;
+print '<br><form method="GET" id="public-link-history-form" action="'.dol_escape_htmltag($_SERVER['PHP_SELF']).'">';
+print '<input type="hidden" name="id" value="'.(int) $object->id.'">';
+print_barre_liste($langs->trans('PublicLinkHistory'), $historyPage, $_SERVER['PHP_SELF'], $historyParam, '', '', '', $historyNum, $historyTotal, 'link', 0, '', '', $historyLimit, 0, 0, 0);
+print '<div class="div-table-responsive"><table class="tagtable nobottomiftotal liste centpercent">';
+print '<thead><tr class="liste_titre">';
+print '<td>'.$langs->trans('PublicLinkGeneratedDate').'</td>';
+print '<td>'.$langs->trans('Email').'</td>';
+print '<td class="center">'.$langs->trans('Status').'</td>';
+print '<td>'.$langs->trans('ExpirationDate').'</td>';
+print '<td>'.$langs->trans('FirstAccess').'</td>';
+print '<td>'.$langs->trans('LastAccess').'</td>';
+print '<td class="center">'.$langs->trans('AccessCount').'</td>';
+print '<td>'.$langs->trans('SubmissionDate').'</td>';
+print '</tr></thead><tbody>';
+if (!empty($historyLinks)) {
+	$historyRow = 0;
+	foreach ($historyLinks as $historyLink) {
+		if ($historyRow >= $historyLimit) {
+			break;
+		}
+		print '<tr class="oddeven">';
+		print '<td>'.(!empty($historyLink->date_creation) ? dol_print_date((int) $historyLink->date_creation, 'dayhour') : '-').'</td>';
+		print '<td>'.($historyLink->email_destinataire !== '' ? dol_escape_htmltag((string) $historyLink->email_destinataire) : '-').'</td>';
+		print '<td class="center">'.$historyLink->getLibStatut(5).'</td>';
+		print '<td>'.(!empty($historyLink->date_expiration) ? dol_print_date((int) $historyLink->date_expiration, 'dayhour') : '-').'</td>';
+		print '<td>'.(!empty($historyLink->date_first_access) ? dol_print_date((int) $historyLink->date_first_access, 'dayhour') : '-').'</td>';
+		print '<td>'.(!empty($historyLink->date_last_access) ? dol_print_date((int) $historyLink->date_last_access, 'dayhour') : '-').'</td>';
+		print '<td class="center">'.((int) $historyLink->nb_access).'</td>';
+		print '<td>'.(!empty($historyLink->date_submit) ? dol_print_date((int) $historyLink->date_submit, 'dayhour') : '-').'</td>';
+		print '</tr>';
+		$historyRow++;
+	}
+} else {
+	print '<tr class="oddeven"><td colspan="8"><span class="opacitymedium">'.$langs->trans('NoRecordFound').'</span></td></tr>';
+}
+print '</tbody></table></div></form>';
 
 print '<br><div class="div-table-responsive"><table class="noborder centpercent">';
 print '<tr class="liste_titre"><td>'.$langs->trans('Piece').'</td><td>'.$langs->trans('Origin').'</td><td class="center">'.$langs->trans('Status').'</td><td>'.$langs->trans('File').'</td>'.($pieceActionColumn ? '<td class="center">'.$langs->trans('Action').'</td>' : '').'</tr>';

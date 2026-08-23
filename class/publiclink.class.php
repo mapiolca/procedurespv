@@ -154,6 +154,81 @@ class PublicLink extends CommonObject
 	}
 
 	/**
+	 * Fetch public links for a raccordement and type.
+	 *
+	 * @param int $fkRaccordement Parent object id
+	 * @param string $type Link type
+	 * @param int $limit Maximum number of rows, 0 for no limit
+	 * @param int $offset First row offset
+	 * @return array<int, PublicLink>
+	 */
+	public function fetchAllForRaccordement($fkRaccordement, $type, $limit = 0, $offset = 0)
+	{
+		global $conf;
+
+		$links = array();
+		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
+		$sql = 'SELECT rowid, entity, fk_raccordement, type_link, token_hash, email_destinataire, date_creation, date_expiration,';
+		$sql .= ' date_first_access, date_last_access, date_submit, payload, ip_last_access, user_agent_last_access, nb_access, status, datec, tms, import_key';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.$this->table_element;
+		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement);
+		$sql .= ' AND entity IN ('.$entityFilter.')';
+		$sql .= " AND type_link = '".$this->db->escape($type)."'";
+		$sql .= ' ORDER BY date_creation DESC, rowid DESC';
+		if ($limit > 0) {
+			$sql .= $this->db->plimit((int) $limit, max(0, (int) $offset));
+		}
+
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			$this->error = $this->db->lasterror();
+			$this->errors[] = $this->error;
+			return $links;
+		}
+
+		while (is_object($obj = $this->db->fetch_object($resql))) {
+			$link = new self($this->db);
+			$link->setVarsFromObj($obj);
+			$links[(int) $link->id] = $link;
+		}
+		$this->db->free($resql);
+
+		return $links;
+	}
+
+	/**
+	 * Count public links for a raccordement and type.
+	 *
+	 * @param int $fkRaccordement Parent object id
+	 * @param string $type Link type
+	 * @return int Number of links, -1 on error
+	 */
+	public function countForRaccordement($fkRaccordement, $type)
+	{
+		global $conf;
+
+		$entityFilter = function_exists('getEntity') ? getEntity('procedurespv_raccordement') : (string) ((int) $conf->entity);
+		$sql = 'SELECT COUNT(rowid) AS nb';
+		$sql .= ' FROM '.MAIN_DB_PREFIX.$this->table_element;
+		$sql .= ' WHERE fk_raccordement = '.((int) $fkRaccordement);
+		$sql .= ' AND entity IN ('.$entityFilter.')';
+		$sql .= " AND type_link = '".$this->db->escape($type)."'";
+
+		$resql = $this->db->query($sql);
+		if (!$resql) {
+			$this->error = $this->db->lasterror();
+			$this->errors[] = $this->error;
+			return -1;
+		}
+
+		$obj = $this->db->fetch_object($resql);
+		$count = is_object($obj) ? (int) $obj->nb : 0;
+		$this->db->free($resql);
+
+		return $count;
+	}
+
+	/**
 	 * Fetch the last submitted collection payload before the current revision.
 	 *
 	 * @param int $fkRaccordement Raccordement id
@@ -336,6 +411,59 @@ class PublicLink extends CommonObject
 	}
 
 	/**
+	 * Return the display status translation key.
+	 *
+	 * Explicit terminal states take precedence over derived access and expiry
+	 * states so a submitted or revoked revision remains historically stable.
+	 *
+	 * @return string Translation key
+	 */
+	public function getStatusLabelKey()
+	{
+		if ((int) $this->status === self::STATUS_REVOKED) {
+			return 'PublicLinkStatusRevoked';
+		}
+		if ((int) $this->status === self::STATUS_SUBMITTED) {
+			return 'PublicLinkStatusSubmitted';
+		}
+		if ((int) $this->status === self::STATUS_ACTIVE) {
+			if (!empty($this->date_expiration) && (int) $this->date_expiration < dol_now()) {
+				return 'PublicLinkStatusExpired';
+			}
+			if (!empty($this->date_first_access) || (int) $this->nb_access > 0) {
+				return 'PublicLinkStatusOpened';
+			}
+
+			return 'PublicLinkStatusNotOpened';
+		}
+
+		return 'PublicLinkStatusUnknown';
+	}
+
+	/**
+	 * Return the native Dolibarr status badge.
+	 *
+	 * @param int $mode Display mode
+	 * @return string HTML status badge
+	 */
+	public function getLibStatut($mode = 5)
+	{
+		global $langs;
+
+		$statusKey = $this->getStatusLabelKey();
+		$statusTypes = array(
+			'PublicLinkStatusRevoked' => 'status8',
+			'PublicLinkStatusSubmitted' => 'status4',
+			'PublicLinkStatusExpired' => 'status8',
+			'PublicLinkStatusOpened' => 'status1',
+			'PublicLinkStatusNotOpened' => 'status0',
+			'PublicLinkStatusUnknown' => 'status0',
+		);
+
+		return dolGetStatus($langs->trans($statusKey), '', '', $statusTypes[$statusKey], $mode);
+	}
+
+	/**
 	 * Populate object from SQL.
 	 *
 	 * @param string $sql SQL query
@@ -352,9 +480,23 @@ class PublicLink extends CommonObject
 
 		$obj = $this->db->fetch_object($resql);
 		if (!is_object($obj)) {
+			$this->db->free($resql);
 			return 0;
 		}
+		$this->setVarsFromObj($obj);
+		$this->db->free($resql);
 
+		return 1;
+	}
+
+	/**
+	 * Populate object properties from a database row.
+	 *
+	 * @param stdClass $obj Database row
+	 * @return void
+	 */
+	private function setVarsFromObj($obj)
+	{
 		$this->id = (int) $obj->rowid;
 		$this->rowid = (int) $obj->rowid;
 		$this->entity = (int) $obj->entity;
@@ -375,8 +517,6 @@ class PublicLink extends CommonObject
 		$this->datec = $this->db->jdate($obj->datec);
 		$this->tms = $this->db->jdate($obj->tms);
 		$this->import_key = (string) $obj->import_key;
-
-		return 1;
 	}
 
 	/**
