@@ -182,6 +182,15 @@ Résultats attendus : la synchronisation est atomique, respecte les droits et ne
 
 Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, la source pilote strictement la lecture seule ou la saisie manuelle, les incohérences de liaison bloquent la validation avec un message explicite et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
 
+## Scénario 8 bis - Rattachements modifiables depuis la synthèse
+
+1. Ouvrir successivement un raccordement brouillon puis un raccordement dans l’état « À compléter en interne » avec un utilisateur disposant du droit de modification.
+2. Vérifier la présence du crayon natif sur les lignes Tiers, Projet, Centrale PV et Source du site.
+3. Modifier chaque valeur, enregistrer l’édition unitaire puis recharger la fiche.
+4. Recommencer avec un utilisateur en lecture seule, puis avec un raccordement annulé.
+
+Résultats attendus : les quatre crayons ne sont proposés que lorsque l’écriture est autorisée et le workflow actif, chaque formulaire contient un token CSRF, les nouvelles valeurs sont persistées par un unique trigger CRUD `UPDATE`, et aucun crayon n’est visible en lecture seule ou sur un dossier annulé.
+
 ## Scénario 9 - Documents, Agenda et Multicompany
 
 1. Activer le module Agenda, puis ouvrir sa configuration native et vérifier la présence des trois événements `PVPROC_RACCORDEMENT_CREATE`, `PVPROC_RACCORDEMENT_UPDATE` et `PVPROC_RACCORDEMENT_DELETE`.

@@ -160,6 +160,30 @@ function procedurespvGetDraftEditableFields()
 }
 
 /**
+ * Tell whether a field can be edited directly from the card.
+ *
+ * The main links remain correctable throughout an active workflow. Other
+ * business values keep the historical draft-only restriction.
+ *
+ * @param string $field Field name
+ * @param int $status Raccordement status
+ * @param bool $permissiontoadd Write permission
+ * @return bool
+ */
+function procedurespvCanEditCardField($field, $status, $permissiontoadd)
+{
+	if (!$permissiontoadd || (int) $status < 0) {
+		return false;
+	}
+
+	if (in_array($field, array('fk_soc', 'fk_project', 'fk_centrale_pv', 'site_source'), true)) {
+		return true;
+	}
+
+	return (int) $status === 0;
+}
+
+/**
  * Render a select with translated options.
  *
  * @param string $htmlName Input name
@@ -260,18 +284,18 @@ function procedurespvRenderDraftFieldInput($object, $field, $form, $formproject,
 }
 
 /**
- * Render a table row with independent draft edition.
+ * Render a table row with independent card edition.
  *
  * @param Raccordement $object Current object
  * @param string $field Field name
  * @param string $label Label
  * @param string $valueHtml Display value
  * @param string $inputHtml Input HTML
- * @param bool $canEditDraft Can edit
+ * @param bool $canEditField Can edit
  * @param string $fieldToEdit Edited field
  * @return void
  */
-function procedurespvPrintDraftEditableRow($object, $field, $label, $valueHtml, $inputHtml, $canEditDraft, $fieldToEdit)
+function procedurespvPrintDraftEditableRow($object, $field, $label, $valueHtml, $inputHtml, $canEditField, $fieldToEdit)
 {
 	global $langs;
 
@@ -279,7 +303,7 @@ function procedurespvPrintDraftEditableRow($object, $field, $label, $valueHtml, 
 	$rowId = 'field_'.$field;
 	print '<tr class="field_'.$field.'" id="'.dol_escape_htmltag($rowId).'">';
 	print '<td class="titlefieldmiddle">'.$label.'</td>';
-	if ($canEditDraft && $fieldToEdit === $field) {
+	if ($canEditField && $fieldToEdit === $field) {
 		$formId = 'form_'.$field;
 		print '<td>';
 		print '<form id="'.dol_escape_htmltag($formId).'" method="POST" action="'.dol_escape_htmltag($urlcard).'">';
@@ -297,7 +321,7 @@ function procedurespvPrintDraftEditableRow($object, $field, $label, $valueHtml, 
 	} else {
 		print '<td>'.$valueHtml.'</td>';
 		print '<td class="right nowraponall">';
-		if ($canEditDraft) {
+		if ($canEditField) {
 			print '<a class="editfielda reposition" href="'.dol_escape_htmltag($urlcard).'&action=editfield&field='.urlencode($field).'&token='.newToken().'#'.dol_escape_htmltag($rowId).'">'.img_edit($langs->transnoentitiesnoconv('Modify'), 0).'</a>';
 		} else {
 			print '&nbsp;';
@@ -374,13 +398,9 @@ if ($action === 'update' && $permissiontoadd && $object->id > 0) {
 }
 
 if ($action === 'updatefield' && $permissiontoadd && $object->id > 0) {
-	if ((int) $object->status !== 0) {
-		accessforbidden($langs->trans('ErrorForbidden'));
-	}
-
 	$field = preg_replace('/[^a-zA-Z0-9_]/', '', GETPOST('field', 'nohtml'));
 	$editableFields = procedurespvGetDraftEditableFields();
-	if (!array_key_exists($field, $editableFields)) {
+	if (!array_key_exists($field, $editableFields) || !procedurespvCanEditCardField($field, (int) $object->status, $permissiontoadd)) {
 		accessforbidden($langs->trans('ErrorForbidden'));
 	}
 
@@ -723,7 +743,7 @@ if ($action === 'create' || $action === 'edit') {
 	$equipmentService = new RaccordementEquipment($db);
 	$installedPowerIsDerived = $equipmentService->hasModules((int) $object->id);
 	$fieldToEdit = ($action === 'editfield') ? preg_replace('/[^a-zA-Z0-9_]/', '', GETPOST('field', 'nohtml')) : '';
-	if (!$canEditDraftFields || !array_key_exists($fieldToEdit, procedurespvGetDraftEditableFields())) {
+	if (!array_key_exists($fieldToEdit, procedurespvGetDraftEditableFields()) || !procedurespvCanEditCardField($fieldToEdit, (int) $object->status, $permissiontoadd)) {
 		$fieldToEdit = '';
 	}
 	$siteSourceOptions = procedurespvGetSiteSourceOptions();
@@ -742,7 +762,7 @@ if ($action === 'create' || $action === 'edit') {
 			$thirdpartyValue = '<span class="opacitymedium">#'.((int) $object->fk_soc).'</span>';
 		}
 	}
-	procedurespvPrintDraftEditableRow($object, 'fk_soc', $langs->trans('ThirdParty'), $thirdpartyValue, procedurespvRenderDraftFieldInput($object, 'fk_soc', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'fk_soc', $langs->trans('ThirdParty'), $thirdpartyValue, procedurespvRenderDraftFieldInput($object, 'fk_soc', $form, $formproject, $centralePVAdapter), procedurespvCanEditCardField('fk_soc', (int) $object->status, $permissiontoadd), $fieldToEdit);
 
 	$projectValue = '';
 	if ((int) $object->fk_project > 0) {
@@ -754,7 +774,7 @@ if ($action === 'create' || $action === 'edit') {
 			$projectValue = '<span class="opacitymedium">#'.((int) $object->fk_project).'</span>';
 		}
 	}
-	procedurespvPrintDraftEditableRow($object, 'fk_project', $langs->trans('Project'), $projectValue, procedurespvRenderDraftFieldInput($object, 'fk_project', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'fk_project', $langs->trans('Project'), $projectValue, procedurespvRenderDraftFieldInput($object, 'fk_project', $form, $formproject, $centralePVAdapter), procedurespvCanEditCardField('fk_project', (int) $object->status, $permissiontoadd), $fieldToEdit);
 
 	$centraleValue = '';
 	if ((int) $object->fk_centrale_pv > 0) {
@@ -767,10 +787,10 @@ if ($action === 'create' || $action === 'edit') {
 			$centraleValue = '<span class="opacitymedium">'.dol_escape_htmltag($centraleLabel !== '' ? $centraleLabel : '#'.((int) $object->fk_centrale_pv)).'</span>';
 		}
 	}
-	procedurespvPrintDraftEditableRow($object, 'fk_centrale_pv', $langs->trans('CentralePV'), $centraleValue, procedurespvRenderDraftFieldInput($object, 'fk_centrale_pv', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'fk_centrale_pv', $langs->trans('CentralePV'), $centraleValue, procedurespvRenderDraftFieldInput($object, 'fk_centrale_pv', $form, $formproject, $centralePVAdapter), procedurespvCanEditCardField('fk_centrale_pv', (int) $object->status, $permissiontoadd), $fieldToEdit);
 
 	$siteSourceLabelKey = isset($siteSourceOptions[(string) $object->site_source]) ? $siteSourceOptions[(string) $object->site_source] : '';
-	procedurespvPrintDraftEditableRow($object, 'site_source', $langs->trans('SiteSource'), ($siteSourceLabelKey !== '' ? $langs->trans($siteSourceLabelKey) : ''), procedurespvRenderDraftFieldInput($object, 'site_source', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
+	procedurespvPrintDraftEditableRow($object, 'site_source', $langs->trans('SiteSource'), ($siteSourceLabelKey !== '' ? $langs->trans($siteSourceLabelKey) : ''), procedurespvRenderDraftFieldInput($object, 'site_source', $form, $formproject, $centralePVAdapter), procedurespvCanEditCardField('site_source', (int) $object->status, $permissiontoadd), $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'site_name_snapshot', $langs->trans('SiteName'), dol_escape_htmltag((string) $object->site_name_snapshot), procedurespvRenderDraftFieldInput($object, 'site_name_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'site_address_snapshot', $langs->trans('Address'), dol_escape_htmltag((string) $object->site_address_snapshot), procedurespvRenderDraftFieldInput($object, 'site_address_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
 	procedurespvPrintDraftEditableRow($object, 'site_zip_snapshot', $langs->trans('Zip'), dol_escape_htmltag((string) $object->site_zip_snapshot), procedurespvRenderDraftFieldInput($object, 'site_zip_snapshot', $form, $formproject, $centralePVAdapter), $canEditDraftFields, $fieldToEdit);
