@@ -100,7 +100,7 @@ if (in_array($action, $sensitiveActions, true)) {
 			}
 		}
 
-		if ((string) $object->site_source === 'local') {
+		if ((int) $object->fk_centrale_pv <= 0) {
 			$localEquipmentValues = array(
 				'onduleurs' => GETPOST('onduleurs', 'restricthtml'),
 				'nombre_onduleurs' => GETPOSTINT('nombre_onduleurs'),
@@ -160,7 +160,7 @@ if (in_array($action, $sensitiveActions, true)) {
 	$object->context['changed_fields'] = array('ref_enedis', 'date_depot_enedis', 'demande_status', 'status');
 	if ($uploadFailed) {
 		$result = -1;
-	} elseif ($action === 'save' && (string) $object->site_source === 'local') {
+	} elseif ($action === 'save' && (int) $object->fk_centrale_pv <= 0) {
 		$result = $equipmentService->saveLocalValues($object, $localEquipmentValues, $user);
 		if ($result < 0) {
 			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
@@ -171,7 +171,7 @@ if (in_array($action, $sensitiveActions, true)) {
 			$result = -1;
 			setEventMessages($object->error, $object->errors, 'errors');
 		}
-	} elseif ($action === 'save' && (string) $object->site_source === 'centralepv' && !empty($object->date_collecte_soumission)) {
+	} elseif ($action === 'save' && (int) $object->fk_centrale_pv > 0 && !empty($object->date_collecte_soumission)) {
 		$result = $equipmentService->prefillFromConfirmedPowerPlant($object, $user, true);
 		if ($result < 0) {
 			setEventMessages($langs->trans($equipmentService->error), $equipmentService->errors, 'errors');
@@ -211,7 +211,7 @@ if ($collectionIsValidated) {
 	$centraleAdapter->prefillRaccordementRequestData($object);
 }
 $equipmentService = new RaccordementEquipment($db);
-$usesLinkedPowerPlant = (string) $object->site_source === 'centralepv';
+$usesLinkedPowerPlant = (int) $object->fk_centrale_pv > 0;
 $inverterLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_INVERTER);
 $moduleLines = $equipmentService->fetchLines((int) $object->id, RaccordementEquipment::TYPE_MODULE);
 if ($collectionIsValidated && $usesLinkedPowerPlant && isModEnabled('powerplantpv')) {

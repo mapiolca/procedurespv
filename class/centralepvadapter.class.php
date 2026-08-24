@@ -317,7 +317,7 @@ class CentralePVAdapter
 	}
 
 	/**
-	 * Return the site values provided by the Centrale selected as source.
+	 * Return the site values provided by the linked Centrale.
 	 *
 	 * Empty source values are omitted so they never erase data already
 	 * collected on the grid connection during a prefill operation.
@@ -329,7 +329,6 @@ class CentralePVAdapter
 	{
 		if (
 			!is_object($raccordement)
-			|| (string) $raccordement->site_source !== 'centralepv'
 			|| (int) $raccordement->fk_centrale_pv <= 0
 			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
 		) {
@@ -352,7 +351,7 @@ class CentralePVAdapter
 	}
 
 	/**
-	 * Prefill the grid-connection snapshot from its Centrale source.
+	 * Prefill the grid-connection snapshot from its linked Centrale.
 	 *
 	 * @param Raccordement $raccordement Grid connection to update in memory
 	 * @return list<string> Changed Raccordement field names
@@ -405,7 +404,6 @@ class CentralePVAdapter
 	{
 		if (
 			!is_object($raccordement)
-			|| (string) $raccordement->site_source !== 'centralepv'
 			|| (int) $raccordement->fk_centrale_pv <= 0
 			|| empty($raccordement->date_collecte_soumission)
 			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0

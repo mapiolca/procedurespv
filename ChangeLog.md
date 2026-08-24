@@ -69,4 +69,5 @@
 - Affichage effectif des cinq datepickers natifs, avec valeurs vides autorisées dans les modales d’ajout et de modification des conventions.
 - Préremplissage persistant de la demande de raccordement lors de la validation de la collecte avec la puissance, le type de réseau, les onduleurs et les modules confirmés ; ces valeurs remplacent le préremplissage initial issu de l’association de la centrale PowerPlantPV.
 - Correction de la récupération des équipements PowerPlantPV lors de la validation de la collecte : les six valeurs liées sont importées depuis la centrale source et restent en lecture seule, tandis qu’elles sont saisissables pour un site local.
-- Ajout du crayon d’édition natif sur les rattachements Tiers, Projet, Centrale PV et Source du site pendant tout le workflow actif, avec contrôle des droits et mise à jour unitaire sécurisée.
+- Déplacement des crayons d’édition natifs entre le libellé et la valeur des champs, avec édition des rattachements Tiers, Projet et Centrale PV pendant tout le workflow actif.
+- Suppression du champ visible « Source du site » : une centrale liée devient automatiquement la source des données, tandis que l’absence de centrale utilise le site local ; l’ancienne colonne reste un miroir technique dérivé pour compatibilité.

@@ -99,7 +99,7 @@ class RaccordementEquipment
 	}
 
 	/**
-	 * Fetch equipment attached to the PowerPlantPV power plant selected as site source.
+	 * Fetch equipment attached to the PowerPlantPV plant linked to the raccordement.
 	 *
 	 * These rows are copied to the normalized raccordement equipment table when
 	 * the collection is validated. They also remain available as form defaults
@@ -116,7 +116,6 @@ class RaccordementEquipment
 		if (
 			!isModEnabled('powerplantpv')
 			|| !is_object($raccordement)
-			|| (string) $raccordement->site_source !== 'centralepv'
 			|| (int) $raccordement->fk_centrale_pv <= 0
 			|| empty($raccordement->date_collecte_soumission)
 			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
@@ -197,15 +196,11 @@ class RaccordementEquipment
 		if (
 			!is_object($raccordement)
 			|| (int) $raccordement->id <= 0
-			|| (string) $raccordement->site_source !== 'centralepv'
+			|| (int) $raccordement->fk_centrale_pv <= 0
 			|| empty($raccordement->date_collecte_soumission)
 			|| getDolGlobalInt('PROCEDURESPV_PREFILL_FROM_CENTRALEPV', 1) <= 0
 		) {
 			return 0;
-		}
-		if ((int) $raccordement->fk_centrale_pv <= 0) {
-			$this->error = 'LinkedPowerPlantRequiredForEquipmentPrefill';
-			return -1;
 		}
 		if (!isModEnabled('powerplantpv')) {
 			$this->error = 'PowerPlantPVRequiredForEquipmentPrefill';
@@ -331,9 +326,9 @@ class RaccordementEquipment
 	}
 
 	/**
-	 * Save equipment values entered for a raccordement whose site source is local.
+	 * Save equipment values entered for a raccordement without a linked PV plant.
 	 *
-	 * Local values replace normalized PowerPlantPV rows so the parent aggregates
+	 * Values entered without a linked plant replace normalized PowerPlantPV rows so the parent aggregates
 	 * cannot subsequently be overwritten by stale equipment selections.
 	 *
 	 * @param Raccordement $raccordement Parent object
@@ -346,7 +341,7 @@ class RaccordementEquipment
 		$this->error = '';
 		$this->errors = array();
 		$this->changedFields = array();
-		if (!is_object($raccordement) || (int) $raccordement->id <= 0 || (string) $raccordement->site_source !== 'local') {
+		if (!is_object($raccordement) || (int) $raccordement->id <= 0 || (int) $raccordement->fk_centrale_pv > 0) {
 			$this->error = 'LocalEquipmentEntryRequiresLocalSiteSource';
 			return -1;
 		}

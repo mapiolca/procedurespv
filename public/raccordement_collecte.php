@@ -719,7 +719,7 @@ if ($formMandateSignatureTown === '') {
 	$formMandateSignatureTown = $formHeadquartersTown;
 }
 
-// A Centrale selected as site source remains authoritative over an older collection revision.
+// A linked Centrale remains authoritative over an older collection revision.
 if (!$isCollecteFormPost && !$currentPayloadIsMobileDraft && !empty($centraleSourceSiteData)) {
 	$formSiteName = isset($centraleSourceSiteData['site_name']) ? (string) $centraleSourceSiteData['site_name'] : $formSiteName;
 	$formSiteAddress = isset($centraleSourceSiteData['address']) ? (string) $centraleSourceSiteData['address'] : $formSiteAddress;
@@ -1146,7 +1146,7 @@ if ($linkUsable && $action === 'submit_collecte') {
 				$result = $object->update($workflowUser);
 			}
 		}
-		if ($result > 0 && (string) $object->site_source === 'centralepv' && (int) $object->fk_centrale_pv > 0) {
+		if ($result > 0 && (int) $object->fk_centrale_pv > 0) {
 			$result = $centralePVAdapter->updateSiteData((int) $object->fk_centrale_pv, array(
 				'site_name' => $siteName,
 				'address' => $siteAddress,

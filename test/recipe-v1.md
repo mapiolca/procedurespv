@@ -20,7 +20,7 @@
 ### Étapes
 
 1. Créer un raccordement depuis `Raccordement > Nouveau raccordement`.
-2. Renseigner le client, le projet, l'identifiant Centrale PV et sélectionner `Centrale PV` comme source du site.
+2. Renseigner le client, le projet et l’identifiant Centrale PV ; vérifier que la centrale liée devient automatiquement la source des données du site.
 3. Enregistrer puis vérifier que le nom du site, l'adresse, le code postal, la commune, le PRM/PDL, la puissance installée et la puissance du raccordement disponibles dans la centrale sont repris dans le raccordement.
 4. Ouvrir l'onglet `Collecte client` et générer un lien public de collecte.
 5. Ouvrir le lien public et vérifier que les données du site de la centrale sont préremplies.
@@ -172,24 +172,24 @@ Résultats attendus : la synchronisation est atomique, respecte les droits et ne
 
 1. Lier une centrale PowerPlantPV contenant deux modèles d’onduleurs et deux modèles de modules avec des quantités différentes, soumettre la collecte publique, puis valider ses pièces, son mandat et la collecte.
 2. Ouvrir la demande de raccordement et vérifier que les références, les quantités et les puissances des deux types d’équipements sont recopiées dans les lignes normalisées et dans les six agrégats de la demande.
-3. Vérifier que ces six valeurs sont en lecture seule lorsque `site_source = centralepv`.
+3. Vérifier que ces six valeurs sont en lecture seule lorsqu’une centrale PowerPlantPV est liée.
 4. Tester un produit PowerPlantPV sans puissance technique : sa référence et sa quantité doivent rester présentes, avec une puissance agrégée nulle pour cette ligne.
 5. Marquer une ancienne ligne comme remplacée dans PowerPlantPV et vérifier qu’elle n’est ni recopiée ni comptée une seconde fois dans les agrégats.
-6. Créer un raccordement avec `site_source = local`, saisir manuellement les six valeurs, enregistrer et recharger la demande.
-7. Vérifier que le passage en source locale supprime les anciennes lignes normalisées PowerPlantPV afin qu’elles ne puissent plus écraser la saisie locale.
-8. Tenter de valider une collecte déclarée avec une centrale source mais sans `fk_centrale_pv`, puis avec PowerPlantPV désactivé.
+6. Créer un raccordement sans centrale liée, saisir manuellement les six valeurs, enregistrer et recharger la demande.
+7. Délier une centrale et vérifier que le retour au site local supprime les anciennes lignes normalisées PowerPlantPV afin qu’elles ne puissent plus écraser la saisie locale.
+8. Tenter de valider une collecte avec une centrale liée puis avec PowerPlantPV désactivé.
 9. Rejouer le scénario dans une seconde entité.
 
-Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, la source pilote strictement la lecture seule ou la saisie manuelle, les incohérences de liaison bloquent la validation avec un message explicite et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
+Résultats attendus : aucune liste d’identifiants n’est stockée, les instantanés restent stables, la présence d’une centrale pilote strictement la lecture seule ou la saisie manuelle, une dépendance PowerPlantPV inactive bloque la récupération avec un message explicite et la puissance du raccordement (`puissance_injection_kva`) reste indépendante des équipements.
 
 ## Scénario 8 bis - Rattachements modifiables depuis la synthèse
 
 1. Ouvrir successivement un raccordement brouillon puis un raccordement dans l’état « À compléter en interne » avec un utilisateur disposant du droit de modification.
-2. Vérifier la présence du crayon natif sur les lignes Tiers, Projet, Centrale PV et Source du site.
-3. Modifier chaque valeur, enregistrer l’édition unitaire puis recharger la fiche.
+2. Vérifier la présence du crayon natif entre le libellé et la valeur des lignes Tiers, Projet et Centrale PV, ainsi que l’absence du champ « Source du site ».
+3. Modifier chaque rattachement, enregistrer l’édition unitaire puis recharger la fiche.
 4. Recommencer avec un utilisateur en lecture seule, puis avec un raccordement annulé.
 
-Résultats attendus : les quatre crayons ne sont proposés que lorsque l’écriture est autorisée et le workflow actif, chaque formulaire contient un token CSRF, les nouvelles valeurs sont persistées par un unique trigger CRUD `UPDATE`, et aucun crayon n’est visible en lecture seule ou sur un dossier annulé.
+Résultats attendus : les trois crayons ne sont proposés que lorsque l’écriture est autorisée et le workflow actif, chaque formulaire contient un token CSRF, les nouvelles valeurs sont persistées par un unique trigger CRUD `UPDATE`, la source technique est dérivée de la centrale liée, et aucun crayon n’est visible en lecture seule ou sur un dossier annulé.
 
 ## Scénario 9 - Documents, Agenda et Multicompany
 

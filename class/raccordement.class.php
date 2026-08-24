@@ -64,7 +64,7 @@ class Raccordement extends CommonObject
 		'fk_soc' => array('type' => 'integer:Societe:societe/class/societe.class.php', 'label' => 'ThirdParty', 'enabled' => 1, 'visible' => 1, 'position' => 20),
 		'fk_project' => array('type' => 'integer:Project:projet/class/project.class.php', 'label' => 'Project', 'enabled' => 1, 'visible' => 1, 'position' => 30),
 		'fk_centrale_pv' => array('type' => 'integer', 'label' => 'CentralePV', 'enabled' => 1, 'visible' => 1, 'position' => 40),
-		'site_source' => array('type' => 'varchar(32)', 'label' => 'SiteSource', 'enabled' => 1, 'visible' => 1, 'default' => 'local', 'position' => 50),
+		'site_source' => array('type' => 'varchar(32)', 'label' => 'SiteSource', 'enabled' => 1, 'visible' => -1, 'default' => 'local', 'position' => 50),
 		'status' => array('type' => 'integer', 'label' => 'Status', 'enabled' => 1, 'visible' => 1, 'notnull' => 1, 'default' => 0, 'position' => 60),
 		'type_exploitation' => array('type' => 'varchar(64)', 'label' => 'ExploitationType', 'enabled' => 1, 'visible' => 1, 'position' => 70),
 		'puissance_installee_kwc' => array('type' => 'double(24,8)', 'label' => 'InstalledPowerKwc', 'enabled' => 1, 'visible' => 1, 'position' => 80),
@@ -251,6 +251,22 @@ class Raccordement extends CommonObject
 	}
 
 	/**
+	 * Synchronize the legacy site source mirror from the linked PV plant.
+	 *
+	 * The presence of fk_centrale_pv is the single source of truth. The stored
+	 * site_source column is retained only for backward compatibility with
+	 * existing installations and integrations.
+	 *
+	 * @return string Derived source code
+	 */
+	public function deriveSiteSource()
+	{
+		$this->site_source = (int) $this->fk_centrale_pv > 0 ? 'centralepv' : 'local';
+
+		return $this->site_source;
+	}
+
+	/**
 	 * Create object.
 	 *
 	 * @param User $user User creating
@@ -263,6 +279,7 @@ class Raccordement extends CommonObject
 
 		$this->entity = (int) $conf->entity;
 		$this->fk_user_author = is_object($user) ? (int) $user->id : 0;
+		$this->deriveSiteSource();
 
 		if (empty($this->ref)) {
 			$this->ref = $this->getNextNumRef();
@@ -309,6 +326,7 @@ class Raccordement extends CommonObject
 			return $result;
 		}
 		$this->socid = (int) $this->fk_soc;
+		$this->deriveSiteSource();
 		$this->date_creation = $this->datec;
 		$this->date_modification = $this->tms;
 		$this->user_creation_id = (int) $this->fk_user_author;
@@ -406,6 +424,7 @@ class Raccordement extends CommonObject
 	public function update($user, $notrigger = 0)
 	{
 		$this->fk_user_modif = is_object($user) ? (int) $user->id : 0;
+		$this->deriveSiteSource();
 
 		$this->db->begin();
 		$result = $this->updateCommon($user, 1);
